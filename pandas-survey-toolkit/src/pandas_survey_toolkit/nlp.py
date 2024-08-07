@@ -5,6 +5,8 @@ import numpy as np
 
 @pf.register_dataframe_method
 def fit_sentence_transformer(df, input_column:str, model_name='all-MiniLM-L6-v2', output_column="sentence_embedding"):
+    """Adds a list of vector embeddings for each string in the input column. These can then be used for downstream
+    tasks like clustering"""
     # Initialize the sentence transformer model
     df_temp = df.copy()
     model = SentenceTransformer(model_name)
