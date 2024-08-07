@@ -1,0 +1,4 @@
+pandas-flavor
+pandas
+sentence_transformers
+numpy==1.24.3
