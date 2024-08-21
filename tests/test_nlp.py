@@ -5,9 +5,11 @@ from sentence_transformers import SentenceTransformer
 from umap import UMAP
 from sklearn.cluster import HDBSCAN
 
+from .context import pandas_survey_toolkit
+
 # Import the functions to test
-from src.pandas_survey_toolkit.analytics import fit_umap, fit_cluster_hdbscan
-from src.pandas_survey_toolkit.nlp import fit_sentence_transformer
+from pandas_survey_toolkit.analytics import fit_umap, fit_cluster_hdbscan
+from pandas_survey_toolkit.nlp import fit_sentence_transformer
 
 # Test for fit_sentence_transformer
 def test_fit_sentence_transformer():
