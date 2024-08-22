@@ -1,9 +1,0 @@
-pandas-flavor
-pandas
-sentence_transformers
-numpy==1.24.3
-umap-learn
-annchor
-hdbscan
-matplotlib
-scikit-learn

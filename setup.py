@@ -1,11 +1,11 @@
 from setuptools import setup, find_packages
+from pathlib import Path
 
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
-
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.md").read_text()
 setup(
     name="pandas-survey-toolkit",
-    version="0.1.0",
+    version="0.1.3",
     author="Andy Laing",
     author_email="andylaing5@gmail.com",
     description="A pandas extension for survey analysis",
@@ -22,9 +22,13 @@ setup(
     ],
     package_dir={"": "src"},
     packages=find_packages(where="src"),
-    python_requires=">=3.6",
+    python_requires=">=3.8",
     install_requires=[
-        "pandas>=1.0.0",
-        "pandas-flavor>=0.2.0",
+        "sentence-transformers>=3.0",
+        "umap-learn>=0.5",
+        "scikit-learn>=1.5",
+        "pandas>=2.2.0",
+        "numpy==1.24.3",
+        "pandas-flavor>=0.6.0"
     ],
 )
