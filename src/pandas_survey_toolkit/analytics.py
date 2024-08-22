@@ -64,7 +64,7 @@ def fit_umap(
     return df_to_return
 
 @pf.register_dataframe_method
-def fit_cluster_hdbscan(df, input_columns=['umap_1', 'umap_2'], output_columns=["cluster", "cluster_probability"], min_cluster_size=5, min_samples=None, 
+def fit_cluster_hdbscan(df, input_columns=['umap_x', 'umap_y'], output_columns=["cluster", "cluster_probability"], min_cluster_size=5, min_samples=None, 
                         cluster_selection_epsilon=0.0, metric='euclidean', cluster_selection_method='eom',
                         allow_single_cluster=False):
     """
@@ -75,7 +75,7 @@ def fit_cluster_hdbscan(df, input_columns=['umap_1', 'umap_2'], output_columns=[
     columns (list): List of column names to use for clustering. Default is ['umap_1', 'umap_2'].
     min_cluster_size (int): The minimum size of clusters. Default is 5.
     min_samples (int): The number of samples in a neighborhood for a point to be considered a core point. Default is None.
-    cluster_selection_epsilon (float): A distance threshold. Clusters below this value will be merged. Default is 0.0.
+    cluster_selection_epsilon (float): A distance threshold. Clusters below this value will be merged. Default is 0.0. higher epslion = fewer, larger clusters
     metric (str): The metric to use for distance computation. Default is 'euclidean'.
     cluster_selection_method (str): The method to select clusters. Either 'eom' or 'leaf'. Default is 'eom'.
     allow_single_cluster (bool): Whether to allow a single cluster. Default is False.

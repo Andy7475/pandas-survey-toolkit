@@ -38,8 +38,8 @@ def test_fit_umap():
 # Test for fit_cluster_hdbscan
 def test_fit_cluster_hdbscan():
     df = pd.DataFrame({
-        'umap_1': [1.0, 2.0, np.nan, 4.0, 5.0, 6.0],
-        'umap_2': [1.0, 2.0, np.nan, 4.0, 5.0, 6.0]
+        'umap_x': [1.0, 2.0, np.nan, 4.0, 5.0, 6.0],
+        'umap_y': [1.0, 2.0, np.nan, 4.0, 5.0, 6.0]
     }, dtype=np.float64)
     
     result = fit_cluster_hdbscan(df)

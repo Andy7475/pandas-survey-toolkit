@@ -1,9 +1,8 @@
 pandas-flavor
 pandas
-sentence_transformers
+sentence_transformers==3.0.1
 numpy==1.24.3
-umap-learn
-annchor
+umap-learn==0.5.6
 matplotlib
 scikit-learn
 pytest
