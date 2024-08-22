@@ -5,7 +5,7 @@ this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 setup(
     name="pandas-survey-toolkit",
-    version="0.1.3",
+    version="0.1.4",
     author="Andy Laing",
     author_email="andylaing5@gmail.com",
     description="A pandas extension for survey analysis",
