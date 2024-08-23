@@ -13,7 +13,7 @@ It will abstract away a lot of the data transformation pipeline to give you usef
 # Functionality
 
 ## Clustering comments
-It will group similar free-text comments together and assign a cluster ID. This can be useful prior to asking an LLM to summarise.
+It will group similar free-text comments together and assign a cluster ID. This is a useful step prior to any qualitative analysis.
 
 ## Sentiment Analysis
 It will measure the sentiment in terms or postive / neutral / negative and assign a score for each of those parts, picking the highest scoring as the most likely overall sentiment.
