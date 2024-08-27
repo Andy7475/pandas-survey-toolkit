@@ -6,6 +6,7 @@ from sentence_transformers import SentenceTransformer
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from pandas_survey_toolkit.utils import combine_results, create_masked_df
+from pandas_survey_toolkit.analytics import fit_cluster_hdbscan, fit_umap
 
 
 @pf.register_dataframe_method
@@ -67,3 +68,18 @@ def extract_sentiment(df, input_column: str, output_columns=["positive", "neutra
     
     df_to_return = combine_results(df, masked_df, mask, output_columns)
     return df_to_return
+
+@pf.register_dataframe_method
+def cluster_comments(df:pd.DataFrame, input_column:str, output_columns:str=["cluster", "cluster_probability"]):
+    """applies a pipeline of 1) vector embeddings 2) dimensional reduction 3) clustering
+    to assign each row a cluster ID so that similar free text comments (found in the input_column) can be grouped together.
+    Returns a modified dataframe. If you want control over parameters for the various functions,
+    then apply them separately. The defaults should be OK in most cases."""
+
+    df_temp = (df.fit_sentence_transformer(input_column = input_column,
+                                                 output_column="sentence_embedding")
+                    .fit_umap(input_columns="sentence_embedding",
+                              embeddings_in_list=True)
+                    .fit_cluster_hdbscan(output_columns=output_columns))
+    
+    return df_temp
