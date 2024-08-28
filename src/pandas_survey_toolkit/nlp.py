@@ -149,3 +149,40 @@ def fit_tfidf(df: pd.DataFrame,
         result_df = combine_results(result_df, masked_df, mask, feature_columns)
 
     return result_df
+
+import pandas as pd
+import pandas_flavor as pf
+import spacy
+from pandas_survey_toolkit.utils import create_masked_df, combine_results
+
+@pf.register_dataframe_method
+def fit_spacy(df, input_column: str, output_column: str = "spacy_output"):
+    """
+    Apply the en_core_web_md spaCy model to the specified column of the DataFrame.
+    
+    Parameters:
+    df (pandas.DataFrame): The input DataFrame.
+    input_column (str): Name of the column containing text to analyze.
+    output_column (str): Name of the output column. Default is "spacy_output".
+    
+    Returns:
+    pandas.DataFrame: The input DataFrame with an additional column containing spaCy doc objects.
+    """
+    # Check if the model is downloaded, if not, download it
+    try:
+        nlp = spacy.load("en_core_web_md")
+    except OSError:
+        print("Downloading en_core_web_md model...")
+        spacy.cli.download("en_core_web_md")
+        nlp = spacy.load("en_core_web_md")
+    
+    # Create masked DataFrame
+    masked_df, mask = create_masked_df(df, [input_column])
+    
+    # Apply spaCy model
+    masked_df[output_column] = masked_df[input_column].apply(nlp)
+    
+    # Combine results
+    df_to_return = combine_results(df, masked_df, mask, output_column)
+    
+    return df_to_return

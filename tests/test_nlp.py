@@ -1,15 +1,18 @@
 import numpy as np
 import pandas as pd
 import pytest
+import spacy
 from sentence_transformers import SentenceTransformer
-from umap import UMAP
 from sklearn.cluster import HDBSCAN
+from umap import UMAP
+
+# Import the functions to test
+from pandas_survey_toolkit.analytics import fit_cluster_hdbscan, fit_umap
+from pandas_survey_toolkit.nlp import (extract_sentiment,
+                                       fit_sentence_transformer, fit_spacy)
 
 from .context import pandas_survey_toolkit
 
-# Import the functions to test
-from pandas_survey_toolkit.analytics import fit_umap, fit_cluster_hdbscan
-from pandas_survey_toolkit.nlp import fit_sentence_transformer, extract_sentiment
 
 # Test for fit_sentence_transformer
 def test_fit_sentence_transformer():
@@ -64,3 +67,32 @@ def test_extract_sentiment():
     
     # Check if sentiment labels are correct
     assert set(result['sentiment'].dropna().unique()) <= {'positive', 'neutral', 'negative'}
+
+def test_fit_spacy():
+    # Create a sample DataFrame
+    df = pd.DataFrame({
+        'comments': ['This is a test', 'Another comment', np.nan, 'SpaCy is cool']
+    })
+    
+    # Apply the fit_spacy function
+    result = fit_spacy(df, input_column='comments')
+    
+    # Check if the new column exists
+    assert 'spacy_output' in result.columns
+    
+    # Check if the number of rows is preserved
+    assert len(result) == len(df)
+    
+    # Check if the entries are spaCy Doc objects (where not NaN)
+    for i, row in result.iterrows():
+        if pd.notna(row['comments']):
+            assert isinstance(row['spacy_output'], spacy.tokens.doc.Doc)
+        else:
+            assert pd.isna(row['spacy_output'])
+    
+    # Check if the content of the spaCy Doc objects matches the input
+    nlp = spacy.load("en_core_web_md")
+    for i, row in result.iterrows():
+        if pd.notna(row['comments']):
+            assert row['spacy_output'].text == row['comments']
+            assert row['spacy_output'].text == nlp(row['comments']).text

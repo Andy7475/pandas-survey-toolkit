@@ -29,6 +29,7 @@ setup(
         "scikit-learn>=1.5",
         "pandas>=2.2.0",
         "numpy==1.24.3",
-        "pandas-flavor>=0.6.0"
+        "pandas-flavor>=0.6.0",
+        "spacy>=3.7"
     ],
 )
