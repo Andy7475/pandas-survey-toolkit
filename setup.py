@@ -30,6 +30,7 @@ setup(
         "pandas>=2.2.0",
         "numpy==1.24.3",
         "pandas-flavor>=0.6.0",
-        "spacy>=3.7"
+        "spacy>=3.7",
+        "gensim>=4.3.3"
     ],
 )

@@ -8,3 +8,4 @@ scikit-learn
 pytest
 transformers
 spacy==3.7.6
+gensim==4.3.3

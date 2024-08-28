@@ -1,8 +1,12 @@
+import re
 from typing import List, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import pandas_flavor as pf
+from gensim.parsing.preprocessing import (remove_stopwords,
+                                          strip_multiple_whitespaces,
+                                          strip_numeric, strip_tags)
 from scipy.special import softmax
 from sentence_transformers import SentenceTransformer
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -153,7 +157,9 @@ def fit_tfidf(df: pd.DataFrame,
 import pandas as pd
 import pandas_flavor as pf
 import spacy
-from pandas_survey_toolkit.utils import create_masked_df, combine_results
+
+from pandas_survey_toolkit.utils import combine_results, create_masked_df
+
 
 @pf.register_dataframe_method
 def fit_spacy(df, input_column: str, output_column: str = "spacy_output"):
@@ -184,5 +190,166 @@ def fit_spacy(df, input_column: str, output_column: str = "spacy_output"):
     
     # Combine results
     df_to_return = combine_results(df, masked_df, mask, output_column)
+    
+    return df_to_return
+
+@pf.register_dataframe_method
+def get_lemma(df: pd.DataFrame, 
+              input_column: str = 'spacy_output', 
+              output_column: str = 'lemmatized_text', 
+              text_pos: List[str] = ['PRON'],
+              remove_punct: bool = True,
+              remove_space: bool = True,
+              remove_stop: bool = True,
+              keep_tokens: Union[List[str], None] = None,
+              keep_pos: Union[List[str], None] = None,
+              keep_dep: Union[List[str], None] = None,
+              join_tokens: bool = True) -> pd.DataFrame:
+    """
+    Extract lemmatized text from the spaCy doc objects in the specified column.
+    
+    Parameters:
+    df (pandas.DataFrame): The input DataFrame.
+    input_column (str): Name of the column containing spaCy doc objects. Default is 'spacy_output'.
+    output_column (str): Name of the output column for lemmatized text. Default is 'lemmatized_text'.
+    text_pos (List[str]): List of POS tags to exclude from lemmatization and return the text. Default is ['PRON'].
+    remove_punct (bool): Whether to remove punctuation. Default is True.
+    remove_space (bool): Whether to remove whitespace tokens. Default is True.
+    remove_stop (bool): Whether to remove stop words. Default is True.
+    keep_tokens (List[str]): List of token texts to always keep. Default is None.
+    keep_pos (List[str]): List of POS tags to always keep. Default is None.
+    keep_dep (List[str]): List of dependency labels to always keep. Default is None.
+    join_tokens (bool): Whether to join tokens into a string. If False, returns a list of tokens. Default is True.
+    
+    Returns:
+    pandas.DataFrame: The input DataFrame with an additional column containing lemmatized text or token list.
+    """
+    # Create masked DataFrame
+    masked_df, mask = create_masked_df(df, [input_column])
+    
+    def remove_token(token):
+        """
+        Returns True if the token should be removed.
+        """
+        if (keep_tokens and token.text in keep_tokens) or \
+           (keep_pos and token.pos_ in keep_pos) or \
+           (keep_dep and token.dep_ in keep_dep):
+            return False
+        return ((remove_punct and token.is_punct) or
+                (remove_space and token.is_space) or
+                (remove_stop and token.is_stop))
+
+    def process_text(doc):
+        tokens = [token.text if token.pos_ in text_pos else token.lemma_ 
+                  for token in doc if not remove_token(token)]
+        return ' '.join(tokens) if join_tokens else tokens
+    
+    # Apply processing
+    masked_df[output_column] = masked_df[input_column].apply(process_text)
+    
+    # Combine results
+    df_to_return = combine_results(df, masked_df, mask, output_column)
+    
+    return df_to_return
+
+
+@pf.register_dataframe_method
+def preprocess_text(
+    df: pd.DataFrame, 
+    input_column: str, 
+    output_column: str = None,
+    remove_html: bool = True,
+    normalize_whitespace: bool = True,
+    remove_numbers: bool = False,
+    remove_stopwords: bool = False,
+    flag_short_comments: bool = False,
+    min_comment_length: int = 5,
+    max_comment_length: int = None,
+    remove_extra_punctuation: bool = True,
+    keep_sentence_punctuation: bool = True,
+    comment_length_column: str = None
+) -> pd.DataFrame:
+    """
+    Preprocess text data in the specified column, tailored for survey responses.
+    
+    Parameters:
+    df (pandas.DataFrame): The input DataFrame.
+    input_column (str): Name of the column containing text to preprocess.
+    output_column (str): Name of the output column. If None, overwrites the input column.
+    remove_html (bool): Whether to remove unexpected HTML tags. Default is True.
+    normalize_whitespace (bool): Whether to normalize whitespace. Default is True.
+    remove_numbers (bool): Whether to remove numbers. Default is False.
+    remove_stopwords (bool): Whether to remove stop words. Default is False.
+    flag_short_comments (bool): Whether to flag very short comments. Default is False.
+    min_comment_length (int): Minimum length of comment to not be flagged as short. Default is 5.
+    max_comment_length (int): Maximum length of comment to keep. If None, keeps full length. Default is None.
+    remove_extra_punctuation (bool): Whether to remove extra punctuation. Default is True.
+    keep_sentence_punctuation (bool): Whether to keep sentence-level punctuation. Default is True.
+    comment_length_column (str): Name of the column to store comment lengths. If None, no column is added. Default is None.
+    
+    Returns:
+    pandas.DataFrame: The input DataFrame with preprocessed text and optionally new columns for short comments, truncation info, and comment length.
+    """
+    output_column = output_column or input_column
+    
+    # Create masked DataFrame
+    masked_df, mask = create_masked_df(df, [input_column])
+    
+    def process_text(text):
+        if remove_html:
+            text = strip_tags(text)
+        
+        if normalize_whitespace:
+            text = strip_multiple_whitespaces(text)
+        
+        if remove_numbers:
+            text = strip_numeric(text)
+        
+        if remove_stopwords:
+            text = remove_stopwords(text)
+        
+        if remove_extra_punctuation:
+            if keep_sentence_punctuation:
+                # Keep commas, periods, question marks, exclamation points, quotation marks, and apostrophes
+                text = re.sub(r"([^.,!?\"'\s])\1+", r"\1", text)
+                # Remove spaces before punctuation, but not before apostrophes
+                text = re.sub(r"\s([.,!?\"](?:\s|$))", r"\1", text)
+                # Ensure we don't have multiple apostrophes
+                text = re.sub(r"'{2,}", "'", text)
+                # Ensure apostrophes are used correctly (e.g., don't remove apostrophe in "don't")
+                text = re.sub(r"\s'|'\s", " ", text)  # Remove single quotes if they're by themselves
+            else:
+                # Keep apostrophes, remove other repeated punctuation
+                text = re.sub(r"([^\w\s'])\1+", r"\1", text)
+                
+        
+        text = text.strip()
+        
+        if max_comment_length:
+            text = text[:max_comment_length]
+        
+        return text
+    
+    # Apply processing
+    masked_df[output_column] = masked_df[input_column].apply(process_text)
+    
+    columns_to_combine = [output_column]
+    
+    if flag_short_comments:
+        short_comment_col = f"{output_column}_is_short"
+        masked_df[short_comment_col] = masked_df[output_column].str.len() < min_comment_length
+        columns_to_combine.append(short_comment_col)
+    
+    if max_comment_length:
+        truncated_col = f"{output_column}_was_truncated"
+        masked_df[truncated_col] = masked_df[input_column].str.len() > max_comment_length
+        columns_to_combine.append(truncated_col)
+    
+    if comment_length_column:
+        masked_df[comment_length_column] = masked_df[output_column].str.len()
+        columns_to_combine.append(comment_length_column)
+    
+    # Combine results
+    df_to_return = combine_results(df, masked_df, mask, columns_to_combine)
     
     return df_to_return
