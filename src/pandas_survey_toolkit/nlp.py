@@ -341,6 +341,7 @@ def preprocess_text(
     input_column: str, 
     output_column: str = None,
     remove_html: bool = True,
+    lower_case: bool = False,
     normalize_whitespace: bool = True,
     remove_numbers: bool = False,
     remove_stopwords: bool = False,
@@ -359,6 +360,7 @@ def preprocess_text(
     input_column (str): Name of the column containing text to preprocess.
     output_column (str): Name of the output column. If None, overwrites the input column.
     remove_html (bool): Whether to remove unexpected HTML tags. Default is True.
+    lower_case (bool): Whether to lowercase all words. Default is False
     normalize_whitespace (bool): Whether to normalize whitespace. Default is True.
     remove_numbers (bool): Whether to remove numbers. Default is False.
     remove_stopwords (bool): Whether to remove stop words. Default is False.
@@ -378,6 +380,8 @@ def preprocess_text(
     masked_df, mask = create_masked_df(df, [input_column])
     
     def process_text(text):
+        if lower_case:
+            text = text.lower()
         if remove_html:
             text = strip_tags(text)
         
