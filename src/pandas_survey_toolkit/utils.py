@@ -42,3 +42,48 @@ def combine_results(original_df, result_df, mask, output_columns:Union[List[str]
     df.loc[mask, output_columns] = result_df.loc[mask, output_columns]
     
     return df
+
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+import pandas as pd
+from typing import Tuple
+
+def apply_vectorizer(df: pd.DataFrame, input_column: str, vectorizer_name: str = 'TfidfVectorizer', feature_prefix: str = 'vect_features_', **vectorizer_kwargs) -> Tuple[pd.DataFrame, object, np.ndarray]:
+    """
+    Apply a vectorizer to a text column in a DataFrame and return a new DataFrame with the vectorized features,
+    along with the fitted vectorizer and feature names.
+
+    Parameters:
+    df (pandas.DataFrame): The input DataFrame.
+    input_column (str): Name of the column containing text to vectorize.
+    vectorizer_name (str): Name of the vectorizer to use ('CountVectorizer' or 'TfidfVectorizer'). Default is 'TfidfVectorizer'.
+    feature_prefix (str): Prefix for the feature column names. Default is 'vect_features_'.
+    **vectorizer_kwargs: Additional keyword arguments to pass to the vectorizer.
+
+    Returns:
+    Tuple[pandas.DataFrame, object, np.ndarray]: 
+        - A new DataFrame containing the vectorized features
+        - The fitted vectorizer object
+        - An array of feature names
+    """
+    # Select the appropriate vectorizer
+    if vectorizer_name == 'CountVectorizer':
+        vectorizer = CountVectorizer(**vectorizer_kwargs)
+    elif vectorizer_name == 'TfidfVectorizer':
+        vectorizer = TfidfVectorizer(**vectorizer_kwargs)
+    else:
+        raise ValueError("Unsupported vectorizer. Use 'CountVectorizer' or 'TfidfVectorizer'.")
+
+    # Fit and transform the input text
+    feature_matrix = vectorizer.fit_transform(df[input_column].fillna(''))
+
+    # Get feature names
+    feature_names = vectorizer.get_feature_names_out()
+
+    # Create a DataFrame with the vectorized features
+    feature_df = pd.DataFrame(
+        feature_matrix.toarray(),
+        columns=[f"{feature_prefix}{name}" for name in feature_names],
+        index=df.index
+    )
+
+    return feature_df, vectorizer, feature_names

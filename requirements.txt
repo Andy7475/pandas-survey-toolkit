@@ -7,4 +7,5 @@ matplotlib
 scikit-learn
 pytest
 transformers
-scipy
+spacy==3.7.6
+gensim==4.3.3
