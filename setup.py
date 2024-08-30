@@ -31,6 +31,7 @@ setup(
         "numpy==1.24.3",
         "pandas-flavor>=0.6.0",
         "spacy>=3.7",
-        "gensim>=4.3.3"
+        "gensim>=4.3.3",
+        "altair>=5.4.0"
     ],
 )

@@ -24,7 +24,7 @@ def extract_keywords(df: pd.DataFrame,
                      spacy_column: str = 'spacy_output',
                      lemma_column: str = 'lemmatized_text',
                      top_n: int = 3,
-                     threshold: float = 0.0,
+                     threshold: float = 0.4,
                      ngram_range: Tuple[int, int] = (1, 1),
                      min_df: int = 5,
                      **kwargs) -> pd.DataFrame:
@@ -284,7 +284,7 @@ def get_lemma(df: pd.DataFrame,
               remove_space: bool = True,
               remove_stop: bool = True,
               keep_tokens: Union[List[str], None] = None,
-              keep_pos: Union[List[str], None] = ["PRON"],
+              keep_pos: Union[List[str], None] = None,
               keep_dep: Union[List[str], None] = ["neg"],
               join_tokens: bool = True) -> pd.DataFrame:
     """
