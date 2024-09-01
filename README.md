@@ -27,4 +27,7 @@ For strongly disagree ... neutral ... strong agree type responses, it will group
 ## Visualisation
 Functions to help make sense of the clusters and topics you have identified using the above functions
 
+## Setup
+If sentence transformers throws dll errors: https://stackoverflow.com/questions/78484297/c-torch-lib-fbgemm-dll-or-one-of-its-dependencies/78794748#78794748
+
 
