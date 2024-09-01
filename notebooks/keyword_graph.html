@@ -1,0 +1,127 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        
+            <script src="lib/bindings/utils.js"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+            
+        
+<center>
+<h1></h1>
+</center>
+
+<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
+<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
+        <link
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
+          crossorigin="anonymous"
+        />
+        <script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
+          crossorigin="anonymous"
+        ></script>
+
+
+        <center>
+          <h1></h1>
+        </center>
+        <style type="text/css">
+
+             #mynetwork {
+                 width: 100%;
+                 height: 800px;
+                 background-color: #ffffff;
+                 border: 1px solid lightgray;
+                 position: relative;
+                 float: left;
+             }
+
+             
+
+             
+
+             
+        </style>
+    </head>
+
+
+    <body>
+        <div class="card" style="width: 100%">
+            
+            
+            <div id="mynetwork" class="card-body"></div>
+        </div>
+
+        
+        
+
+        <script type="text/javascript">
+
+              // initialize global variables.
+              var edges;
+              var nodes;
+              var allNodes;
+              var allEdges;
+              var nodeColors;
+              var originalNodes;
+              var network;
+              var container;
+              var options, data;
+              var filter = {
+                  item : '',
+                  property : '',
+                  value : []
+              };
+
+              
+
+              
+
+              // This method is responsible for drawing the graph, returns the drawn network
+              function drawGraph() {
+                  var container = document.getElementById('mynetwork');
+
+                  
+
+                  // parsing and collecting nodes and edges from the python
+                  nodes = new vis.DataSet([{"color": "#97c2fc", "id": "like", "label": "like", "shape": "dot", "size": 9, "title": "Keyword: like\nCount: 9"}, {"color": "#97c2fc", "id": "staff", "label": "staff", "shape": "dot", "size": 34, "title": "Keyword: staff\nCount: 34"}, {"color": "#97c2fc", "id": "center", "label": "center", "shape": "dot", "size": 19, "title": "Keyword: center\nCount: 19"}, {"color": "#97c2fc", "id": "event", "label": "event", "shape": "dot", "size": 21, "title": "Keyword: event\nCount: 21"}, {"color": "#97c2fc", "id": "attend", "label": "attend", "shape": "dot", "size": 18, "title": "Keyword: attend\nCount: 18"}, {"color": "#97c2fc", "id": "free", "label": "free", "shape": "dot", "size": 20, "title": "Keyword: free\nCount: 20"}, {"color": "#97c2fc", "id": "pay", "label": "pay", "shape": "dot", "size": 7, "title": "Keyword: pay\nCount: 7"}, {"color": "#97c2fc", "id": "fee", "label": "fee", "shape": "dot", "size": 17, "title": "Keyword: fee\nCount: 17"}, {"color": "#97c2fc", "id": "helpful", "label": "helpful", "shape": "dot", "size": 19, "title": "Keyword: helpful\nCount: 19"}, {"color": "#97c2fc", "id": "friendly", "label": "friendly", "shape": "dot", "size": 8, "title": "Keyword: friendly\nCount: 8"}, {"color": "#97c2fc", "id": "summer", "label": "summer", "shape": "dot", "size": 8, "title": "Keyword: summer\nCount: 8"}, {"color": "#97c2fc", "id": "camp", "label": "camp", "shape": "dot", "size": 11, "title": "Keyword: camp\nCount: 11"}, {"color": "#97c2fc", "id": "mexican", "label": "mexican", "shape": "dot", "size": 8, "title": "Keyword: mexican\nCount: 8"}, {"color": "#97c2fc", "id": "american", "label": "american", "shape": "dot", "size": 4, "title": "Keyword: american\nCount: 4"}]);
+                  edges = new vis.DataSet([{"arrows": "to", "from": "like", "title": "Count: 3", "to": "center", "width": 3}, {"arrows": "to", "from": "staff", "title": "Count: 4", "to": "helpful", "width": 4}, {"arrows": "to", "from": "event", "title": "Count: 4", "to": "attend", "width": 4}, {"arrows": "to", "from": "attend", "title": "Count: 5", "to": "free", "width": 5}, {"arrows": "to", "from": "free", "title": "Count: 3", "to": "event", "width": 3}, {"arrows": "to", "from": "pay", "title": "Count: 4", "to": "fee", "width": 4}, {"arrows": "to", "from": "friendly", "title": "Count: 4", "to": "helpful", "width": 4}, {"arrows": "to", "from": "summer", "title": "Count: 5", "to": "camp", "width": 5}, {"arrows": "to", "from": "mexican", "title": "Count: 4", "to": "american", "width": 4}]);
+
+                  nodeColors = {};
+                  allNodes = nodes.get({ returnType: "Object" });
+                  for (nodeId in allNodes) {
+                    nodeColors[nodeId] = allNodes[nodeId].color;
+                  }
+                  allEdges = edges.get({ returnType: "Object" });
+                  // adding nodes and edges to the graph
+                  data = {nodes: nodes, edges: edges};
+
+                  var options = {"edges": {"arrows": {"to": {"enabled": true}}, "color": {"inherit": true}, "smooth": false}, "physics": {"minVelocity": 0.1}};
+
+                  
+
+
+                  
+
+                  network = new vis.Network(container, data, options);
+
+                  
+
+                  
+
+                  
+
+
+                  
+
+                  return network;
+
+              }
+              drawGraph();
+        </script>
+    </body>
+</html>
