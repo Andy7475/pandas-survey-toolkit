@@ -6,12 +6,66 @@ from sentence_transformers import SentenceTransformer
 from sklearn.cluster import HDBSCAN
 from umap import UMAP
 
-# Import the functions to test
-from pandas_survey_toolkit.analytics import fit_cluster_hdbscan, fit_umap
-from pandas_survey_toolkit.nlp import (extract_sentiment,
-                                       fit_sentence_transformer, fit_spacy)
-
 from .context import pandas_survey_toolkit
+
+# Import the functions to test
+from pandas_survey_toolkit.nlp import (encode_likert, extract_sentiment,
+                                       fit_sentence_transformer, fit_spacy, cluster_questions)
+
+
+
+@pytest.fixture
+def sample_df():
+    np.random.seed(42)
+    return pd.DataFrame({
+        'Q1': np.random.choice(['Strongly Agree', 'Agree', 'Neutral', 'Disagree', 'Strongly Disagree'], 100),
+        'Q2': np.random.choice(['Strongly Agree', 'Agree', 'Neutral', 'Disagree', 'Strongly Disagree'], 100),
+        'Q3': np.random.choice(['Strongly Agree', 'Agree', 'Neutral', 'Disagree', 'Strongly Disagree'], 100),
+        'Q4': np.random.choice(['Strongly Agree', 'Agree', 'Neutral', 'Disagree', 'Strongly Disagree'], 100),
+        'OtherColumn': np.random.rand(100)
+    })
+
+def test_cluster_questions_columns(sample_df):
+    result = sample_df.cluster_questions(columns=['Q1', 'Q2', 'Q3', 'Q4'])
+    assert 'question_cluster_id' in result.columns
+    assert 'question_cluster_probability' in result.columns
+    assert 'umap_x' in result.columns
+    assert 'umap_y' in result.columns
+
+def test_cluster_questions_pattern(sample_df):
+    result = sample_df.cluster_questions(pattern='^Q')
+    assert 'question_cluster_id' in result.columns
+    assert 'question_cluster_probability' in result.columns
+    assert 'umap_x' in result.columns
+    assert 'umap_y' in result.columns
+
+def test_cluster_questions_custom_mapping(sample_df):
+    custom_mapping = {
+        'strongly agree': 2,
+        'agree': 1,
+        'neutral': 0,
+        'disagree': -1,
+        'strongly disagree': -2
+    }
+    result = sample_df.cluster_questions(columns=['Q1', 'Q2', 'Q3', 'Q4'], likert_mapping=custom_mapping)
+    assert 'question_cluster_id' in result.columns
+    assert 'question_cluster_probability' in result.columns
+
+def test_cluster_questions_umap_parameters(sample_df):
+    result = sample_df.cluster_questions(columns=['Q1', 'Q2', 'Q3', 'Q4'], 
+                                         umap_n_neighbors=10, umap_min_dist=0.05)
+    assert 'umap_x' in result.columns
+    assert 'umap_y' in result.columns
+
+def test_cluster_questions_hdbscan_parameters(sample_df):
+    result = sample_df.cluster_questions(columns=['Q1', 'Q2', 'Q3', 'Q4'], 
+                                         hdbscan_min_cluster_size=10, hdbscan_min_samples=5)
+    assert 'question_cluster_id' in result.columns
+    assert 'question_cluster_probability' in result.columns
+
+def test_cluster_questions_error_no_columns_or_pattern(sample_df):
+    with pytest.raises(ValueError):
+        sample_df.cluster_questions()
 
 
 # Test for fit_sentence_transformer
@@ -96,3 +150,77 @@ def test_fit_spacy():
         if pd.notna(row['comments']):
             assert row['spacy_output'].text == row['comments']
             assert row['spacy_output'].text == nlp(row['comments']).text
+
+
+
+@pytest.fixture
+def sample_df2():
+    return pd.DataFrame({
+        'Q1': ['Strongly Agree', 'Disagree', 'Neither Agree nor Disagree', 'Agree', 'Strongly Disagree'],
+        'Q2': ['Agree', 'Disagree', 'Neutral', 'Strongly Agree', 'Do not agree'],
+        'Q3': ['Strongly Agree', np.nan, 'Neutral', 'Agree', 'Unconverted']
+    })
+
+@pytest.fixture
+def custom_mapping():
+    return {
+        'strongly agree': 2,
+        'agree': 1,
+        'neither agree nor disagree': 0,
+        'neutral': 0,
+        'disagree': -1,
+        'strongly disagree': -2,
+        'do not agree': -1
+    }
+
+def test_default_mapping(sample_df2):
+    result = sample_df2.encode_likert(['Q1', 'Q2'])
+    
+    expected_Q1 = [1, -1, 0, 1, -1]
+    expected_Q2 = [1, -1, 0, 1, -1]
+    
+    assert list(result['likert_encoded_Q1']) == expected_Q1
+    assert list(result['likert_encoded_Q2']) == expected_Q2
+
+def test_column_production(sample_df2):
+    result = sample_df2.encode_likert(['Q1', 'Q2', 'Q3'])
+    
+    expected_columns = set(sample_df2.columns) | {'likert_encoded_Q1', 'likert_encoded_Q2', 'likert_encoded_Q3'}
+    assert set(result.columns) == expected_columns
+
+def test_nan_handling(sample_df2):
+    result = sample_df2.encode_likert(['Q3'])
+    
+    assert pd.isna(result.loc[1, 'likert_encoded_Q3'])
+    assert result.loc[0, 'likert_encoded_Q3'] == 1  # 'Strongly Agree'
+    assert result.loc[2, 'likert_encoded_Q3'] == 0  # 'Neutral'
+
+def test_custom_mapping(sample_df2, custom_mapping):
+    result = sample_df2.encode_likert(['Q1', 'Q2'], custom_mapping=custom_mapping)
+    
+    expected_Q1 = [2, -1, 0, 1, -2]
+    expected_Q2 = [1, -1, 0, 2, -1]
+    
+    assert list(result['likert_encoded_Q1']) == expected_Q1
+    assert list(result['likert_encoded_Q2']) == expected_Q2
+
+def test_custom_mapping_nan_handling(sample_df2, custom_mapping):
+    result = sample_df2.encode_likert(['Q3'], custom_mapping=custom_mapping)
+    
+    assert pd.isna(result.loc[1, 'likert_encoded_Q3'])
+    assert result.loc[0, 'likert_encoded_Q3'] == 2  # 'Strongly Agree'
+    assert result.loc[2, 'likert_encoded_Q3'] == 0  # 'Neutral'
+
+def test_output_prefix(sample_df2):
+    result = sample_df2.encode_likert(['Q1'], output_prefix='custom_')
+    
+    assert 'custom_Q1' in result.columns
+    assert 'likert_encoded_Q1' not in result.columns
+
+def test_unconverted_warning(sample_df2, custom_mapping):
+    with pytest.warns(UserWarning, match="The following phrases were not converted"):
+        sample_df2.encode_likert(['Q3'], custom_mapping=custom_mapping)
+
+def test_default_mapping_warning(sample_df2):
+    with pytest.warns(UserWarning, match="The default mapping didn't convert the following responses"):
+        sample_df2.encode_likert(['Q3'])

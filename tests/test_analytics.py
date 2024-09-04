@@ -2,15 +2,15 @@ import numpy as np
 import pandas as pd
 import pytest
 from sentence_transformers import SentenceTransformer
+from sklearn.cluster import HDBSCAN
 from sklearn.datasets import make_blobs
 from umap import UMAP
-from sklearn.cluster import HDBSCAN
-
 from .context import pandas_survey_toolkit
-
 # Import the functions to test
-from pandas_survey_toolkit.analytics import fit_umap, fit_cluster_hdbscan
-from pandas_survey_toolkit.nlp import fit_sentence_transformer
+from pandas_survey_toolkit.analytics import fit_cluster_hdbscan, fit_umap
+
+
+
 
 # Test for fit_umap
 def test_fit_umap():
@@ -49,3 +49,8 @@ def test_fit_cluster_hdbscan():
     assert result.shape == (6, 4) #2 extra columns added
     assert np.isnan(result['cluster'][2])  # Check if NaN is preserved
     assert np.isnan(result['cluster_probability'][2])  # Check if NaN is preserved
+
+
+
+# Note: Testing the printed output (cluster summary) is typically done through capsys or capfd fixtures in pytest,
+# but for simplicity, we're not including that test here. In a real-world scenario, you might want to add such a test.

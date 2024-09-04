@@ -1,14 +1,16 @@
-from typing import Union, List
 import warnings
-import pandas as pd
-import pandas_flavor as pf
-from sentence_transformers import SentenceTransformer
+from typing import List, Union
+
 import numpy as np
-import umap
 import pandas as pd
 import pandas_flavor as pf
+import umap
+from sentence_transformers import SentenceTransformer
 from sklearn.cluster import HDBSCAN
-from pandas_survey_toolkit.utils import create_masked_df, combine_results
+from sklearn.preprocessing import StandardScaler
+
+from pandas_survey_toolkit.utils import combine_results, create_masked_df
+
 
 @pf.register_dataframe_method
 def fit_umap(
@@ -107,3 +109,5 @@ def fit_cluster_hdbscan(df, input_columns=['umap_x', 'umap_y'], output_columns=[
     
     df_to_return = combine_results(df, masked_df, mask, output_columns)
     return df_to_return
+
+

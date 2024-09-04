@@ -1,4 +1,6 @@
 import re
+import warnings
+from collections import defaultdict
 from typing import List, Tuple, Union
 
 import numpy as np
@@ -16,6 +18,133 @@ from pandas_survey_toolkit.analytics import fit_cluster_hdbscan, fit_umap
 from pandas_survey_toolkit.utils import (apply_vectorizer, combine_results,
                                          create_masked_df)
 
+@pf.register_dataframe_method
+def cluster_questions(df, columns=None, pattern=None, likert_mapping=None, 
+                      umap_n_neighbors=15, umap_min_dist=0.1,
+                      hdbscan_min_cluster_size=5, hdbscan_min_samples=None):
+    """
+    Cluster Likert scale questions based on response patterns.
+    
+    Parameters:
+    df (pandas.DataFrame): The input DataFrame.
+    columns (list): List of column names to cluster. If None, all columns matching the pattern will be used.
+    pattern (str): Regex pattern to match column names. Used if columns is None.
+    likert_mapping (dict): Custom mapping for Likert scale responses. If None, default mapping is used.
+    umap_n_neighbors (int): The size of local neighborhood for UMAP. Default is 15.
+    umap_min_dist (float): The minimum distance between points in UMAP. Default is 0.1.
+    umap_n_components (int): The number of dimensions for UMAP output. Default is 2.
+    hdbscan_min_cluster_size (int): The minimum size of clusters for HDBSCAN. Default is 5.
+    hdbscan_min_samples (int): The number of samples in a neighborhood for a core point in HDBSCAN. Default is None.
+    
+    Returns:
+    pandas.DataFrame: The input DataFrame with additional columns for encoded Likert responses, UMAP coordinates, and cluster IDs.
+    """
+    
+    # Select columns
+    if columns is None and pattern is None:
+        raise ValueError("Either 'columns' or 'pattern' must be provided.")
+    elif columns is None:
+        columns = df.filter(regex=pattern).columns.tolist()
+    
+    # Encode Likert scales
+    df = df.encode_likert(columns, custom_mapping=likert_mapping)
+    encoded_columns = [f"likert_encoded_{col}" for col in columns]
+    
+   
+    # Apply UMAP
+    df = df.fit_umap(input_columns=encoded_columns, n_neighbors=umap_n_neighbors, 
+                     min_dist=umap_min_dist,
+                     metric='cosine')
+    
+    # Apply HDBSCAN
+    df = df.fit_cluster_hdbscan(input_columns=['umap_x', 'umap_y'], 
+                                output_columns=['question_cluster_id', 'question_cluster_probability'],
+                                min_cluster_size=hdbscan_min_cluster_size, 
+                                min_samples=hdbscan_min_samples)
+    
+   
+    return df
+
+
+@pf.register_dataframe_method
+def encode_likert(df, likert_columns, output_prefix='likert_encoded_', custom_mapping=None):
+    """
+    Encode Likert scale responses to numeric values.
+    
+    Parameters:
+    df (pandas.DataFrame): The input DataFrame.
+    likert_columns (list): List of column names containing Likert scale responses.
+    output_prefix (str): Prefix for the new encoded columns. Default is 'likert_encoded_'.
+    custom_mapping (dict): Optional custom mapping for Likert scale responses.
+    
+    Returns:
+    pandas.DataFrame: The input DataFrame with additional columns for encoded Likert responses.
+    """
+    
+    def default_mapping(response):
+        if pd.isna(response):
+            return pd.NA
+        response = str(response).lower().strip()
+        if re.search(r'\bagree\b', response) and not re.search(r'\b(dis|not)\s*agree\b', response):
+            return 1
+        elif re.search(r'\b(neutral|neither|unsure)\b', response):
+            return 0
+        elif re.search(r'agree', response) and re.search(r'\b(dis|not)\s*agree\b', response):
+            return -1
+        else:
+            return None
+    
+    conversion_summary = defaultdict(lambda: defaultdict(int))
+    unconverted_phrases = set()
+
+    if custom_mapping is None:
+        mapping_func = default_mapping
+        print("Using default mapping:")
+        print("-1: Phrases containing 'disagree', 'do not agree', etc.")
+        print(" 0: Phrases containing 'neutral', 'neither', 'unsure', etc.")
+        print("+1: Phrases containing 'agree' (but not 'disagree' or 'not agree')")
+        print("NaN: NaN values are preserved")
+    else:
+        def mapping_func(response):
+            if pd.isna(response):
+                return pd.NA
+            converted = custom_mapping.get(str(response).lower().strip())
+            if converted is None:
+                unconverted_phrases.add(str(response))
+                return pd.NA
+            return converted
+        print("Using custom mapping:", custom_mapping)
+        print("NaN: NaN values are preserved")
+    
+    for column in likert_columns:
+        output_column = f"{output_prefix}{column}"
+        df[output_column] = df[column].apply(lambda x: mapping_func(x))
+        
+        # Update conversion summary
+        for original, converted in zip(df[column], df[output_column]):
+            conversion_summary[column][f"{original} -> {converted}"] += 1
+    
+    # Print conversion summary
+    print("\nConversion Summary:")
+    for column, summary in conversion_summary.items():
+        print(f"\nColumn: {column}")
+        for conversion, count in summary.items():
+            print(f"  {conversion}: {count} times")
+    
+    # Alert about unconverted phrases
+    if unconverted_phrases:
+        warnings.warn(f"The following phrases were not converted (mapped to NaN): {', '.join(unconverted_phrases)}")
+    
+    # Alert if default mapping didn't convert everything
+    if custom_mapping is None:
+        all_responses = set()
+        for column in likert_columns:
+            all_responses.update(df[column].dropna().unique())
+        unconverted = [resp for resp in all_responses if default_mapping(resp) not in [-1, 0, 1]]
+        if unconverted:
+            warnings.warn(f"The default mapping didn't convert the following responses: {', '.join(unconverted)}")
+    
+    return df
 @pf.register_dataframe_method
 def extract_keywords(df: pd.DataFrame, 
                      input_column: str, 
