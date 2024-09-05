@@ -85,15 +85,22 @@ def encode_likert(df, likert_columns, output_prefix='likert_encoded_', custom_ma
         if pd.isna(response):
             return pd.NA
         response = str(response).lower().strip()
-        if re.search(r'\bagree\b', response) and not re.search(r'\b(dis|not)\s*agree\b', response):
-            return 1
-        elif re.search(r'\b(neutral|neither|unsure)\b', response):
+        
+        # Neutral / Neither / Unsure / Don't know (0)
+        if re.search(r'\b(neutral|neither|unsure|know)\b', response) or re.search(r'neither\s+agree\s+nor\s+disagree', response):
             return 0
-        elif re.search(r'agree', response) and re.search(r'\b(dis|not)\s*agree\b', response):
+        
+        # Disagree / Dissatisfied (-1)
+        if re.search(r'\b(disagree)\b', response) or re.search(r'\b(dis|not|no)[-]{0,1}\s*(agree|satisf)', response):
             return -1
-        else:
-            return None
-    
+        
+        # Agree / Satisfied (1)
+        if re.search(r'\bagree\b', response) or re.search(r'satisf', response):
+            return 1
+        
+        # Unable to classify
+        return None
+        
     conversion_summary = defaultdict(lambda: defaultdict(int))
     unconverted_phrases = set()
 

@@ -158,7 +158,8 @@ def sample_df2():
     return pd.DataFrame({
         'Q1': ['Strongly Agree', 'Disagree', 'Neither Agree nor Disagree', 'Agree', 'Strongly Disagree'],
         'Q2': ['Agree', 'Disagree', 'Neutral', 'Strongly Agree', 'Do not agree'],
-        'Q3': ['Strongly Agree', np.nan, 'Neutral', 'Agree', 'Unconverted']
+        'Q3': ['Strongly Agree', np.nan, 'Neutral', 'Agree', 'Unconverted'],
+        'Q4' : ['Very Satisfied', 'neither satisfied nor dissatisfied', 'dissatisfied', 'very dis-satisfied', 'satisfied']
     })
 
 @pytest.fixture
@@ -174,13 +175,15 @@ def custom_mapping():
     }
 
 def test_default_mapping(sample_df2):
-    result = sample_df2.encode_likert(['Q1', 'Q2'])
+    result = sample_df2.encode_likert(['Q1', 'Q2','Q4'])
     
     expected_Q1 = [1, -1, 0, 1, -1]
     expected_Q2 = [1, -1, 0, 1, -1]
+    expected_Q4 = [1, 0, -1, -1, 1]
     
     assert list(result['likert_encoded_Q1']) == expected_Q1
     assert list(result['likert_encoded_Q2']) == expected_Q2
+    assert list(result['likert_encoded_Q4']) == expected_Q4
 
 def test_column_production(sample_df2):
     result = sample_df2.encode_likert(['Q1', 'Q2', 'Q3'])
