@@ -1,0 +1,2694 @@
+{
+  "nodes": [
+    {
+      "id": "category_7",
+      "group": "category",
+      "size": 1,
+      "index": 7
+    },
+    {
+      "id": "category_5",
+      "group": "category",
+      "size": 1,
+      "index": 5
+    },
+    {
+      "id": "category_4",
+      "group": "category",
+      "size": 1,
+      "index": 4
+    },
+    {
+      "id": "category_6",
+      "group": "category",
+      "size": 1,
+      "index": 6
+    },
+    {
+      "id": "category_1",
+      "group": "category",
+      "size": 1,
+      "index": 1
+    },
+    {
+      "id": "category_2",
+      "group": "category",
+      "size": 1,
+      "index": 2
+    },
+    {
+      "id": "category_0",
+      "group": "category",
+      "size": 1,
+      "index": 0
+    },
+    {
+      "id": "category_3",
+      "group": "category",
+      "size": 1,
+      "index": 3
+    },
+    {
+      "id": "comment_19",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_20",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_21",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_82",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_83",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_84",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_88",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_92",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_97",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_101",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_102",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_110",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_114",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_197",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_207",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_210",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_212",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_214",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_224",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_239",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_241",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_287",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_327",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_329",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_337",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_338",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_341",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_346",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_349",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_350",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_352",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_354",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_360",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_368",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_381",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_386",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_387",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_397",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_398",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_399",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_426",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_430",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_433",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_443",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_444",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_454",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_464",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_494",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_496",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_502",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_507",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_516",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_530",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_549",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_567",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_568",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_581",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_582",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_583",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_584",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_587",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_596",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_601",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_607",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_613",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_614",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_616",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_622",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_633",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_644",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_652",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_662",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_668",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_678",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_686",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_718",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_739",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_779",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_790",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_827",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_828",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_838",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_841",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_842",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_850",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_854",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "comment_856",
+      "group": "comment",
+      "size": 1
+    },
+    {
+      "id": "person",
+      "group": "keyword",
+      "size": 2
+    },
+    {
+      "id": "door",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "meet",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "staff",
+      "group": "keyword",
+      "size": 2
+    },
+    {
+      "id": "eager",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "answer",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "question",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "charge",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "attend",
+      "group": "keyword",
+      "size": 7
+    },
+    {
+      "id": "free",
+      "group": "keyword",
+      "size": 11
+    },
+    {
+      "id": "public",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "event",
+      "group": "keyword",
+      "size": 6
+    },
+    {
+      "id": "discount",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "service",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "price",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "little",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "expensive",
+      "group": "keyword",
+      "size": 2
+    },
+    {
+      "id": "family",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "food",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "idea",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "far",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "class",
+      "group": "keyword",
+      "size": 2
+    },
+    {
+      "id": "want",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "experience",
+      "group": "keyword",
+      "size": 6
+    },
+    {
+      "id": "know",
+      "group": "keyword",
+      "size": 2
+    },
+    {
+      "id": "well",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "not",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "great",
+      "group": "keyword",
+      "size": 5
+    },
+    {
+      "id": "good",
+      "group": "keyword",
+      "size": 7
+    },
+    {
+      "id": "speak",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "welcoming",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "professional",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "clean",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "welcome",
+      "group": "keyword",
+      "size": 2
+    },
+    {
+      "id": "get",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "difficult",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "believe",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "fund",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "possible",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "cost",
+      "group": "keyword",
+      "size": 3
+    },
+    {
+      "id": "reasonable",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "pretty",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "scholarship",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "kid",
+      "group": "keyword",
+      "size": 2
+    },
+    {
+      "id": "summer",
+      "group": "keyword",
+      "size": 9
+    },
+    {
+      "id": "camp",
+      "group": "keyword",
+      "size": 10
+    },
+    {
+      "id": "wish",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "exhibit",
+      "group": "keyword",
+      "size": 2
+    },
+    {
+      "id": "appreciate",
+      "group": "keyword",
+      "size": 2
+    },
+    {
+      "id": "never",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "rent",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "festival",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "affordable",
+      "group": "keyword",
+      "size": 2
+    },
+    {
+      "id": "prohibitive",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "common",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "enjoy",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "accessible",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "wonderful",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "awesome",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "love",
+      "group": "keyword",
+      "size": 3
+    },
+    {
+      "id": "excellent",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "show",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "friend",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "martinez",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "garden",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "helpful",
+      "group": "keyword",
+      "size": 4
+    },
+    {
+      "id": "ok",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "herlinda",
+      "group": "keyword",
+      "size": 3
+    },
+    {
+      "id": "zamora",
+      "group": "keyword",
+      "size": 2
+    },
+    {
+      "id": "main",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "office",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "kind",
+      "group": "keyword",
+      "size": 2
+    },
+    {
+      "id": "time",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "work",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "manager",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "rude",
+      "group": "keyword",
+      "size": 3
+    },
+    {
+      "id": "fantastic",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "miss",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "pleasant",
+      "group": "keyword",
+      "size": 2
+    },
+    {
+      "id": "job",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "management",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "group",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "high",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "school",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "student",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "thank",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "big",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "transportation",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "issue",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "quality",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "programming",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "mission",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "neighborhood",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "director",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "leave",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "knowledgeable",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "extremely",
+      "group": "keyword",
+      "size": 1
+    },
+    {
+      "id": "friendly",
+      "group": "keyword",
+      "size": 1
+    }
+  ],
+  "links": [
+    {
+      "source": "category_7",
+      "target": "comment_19",
+      "value": 1
+    },
+    {
+      "source": "category_7",
+      "target": "comment_224",
+      "value": 1
+    },
+    {
+      "source": "category_7",
+      "target": "comment_239",
+      "value": 1
+    },
+    {
+      "source": "category_7",
+      "target": "comment_568",
+      "value": 1
+    },
+    {
+      "source": "category_7",
+      "target": "comment_583",
+      "value": 1
+    },
+    {
+      "source": "category_7",
+      "target": "comment_601",
+      "value": 1
+    },
+    {
+      "source": "category_7",
+      "target": "comment_622",
+      "value": 1
+    },
+    {
+      "source": "category_7",
+      "target": "comment_841",
+      "value": 1
+    },
+    {
+      "source": "category_7",
+      "target": "comment_842",
+      "value": 1
+    },
+    {
+      "source": "category_7",
+      "target": "comment_850",
+      "value": 1
+    },
+    {
+      "source": "category_7",
+      "target": "comment_856",
+      "value": 1
+    },
+    {
+      "source": "category_5",
+      "target": "comment_20",
+      "value": 1
+    },
+    {
+      "source": "category_5",
+      "target": "comment_21",
+      "value": 1
+    },
+    {
+      "source": "category_5",
+      "target": "comment_214",
+      "value": 1
+    },
+    {
+      "source": "category_5",
+      "target": "comment_613",
+      "value": 1
+    },
+    {
+      "source": "category_5",
+      "target": "comment_652",
+      "value": 1
+    },
+    {
+      "source": "category_5",
+      "target": "comment_838",
+      "value": 1
+    },
+    {
+      "source": "category_4",
+      "target": "comment_82",
+      "value": 1
+    },
+    {
+      "source": "category_4",
+      "target": "comment_88",
+      "value": 1
+    },
+    {
+      "source": "category_4",
+      "target": "comment_92",
+      "value": 1
+    },
+    {
+      "source": "category_4",
+      "target": "comment_337",
+      "value": 1
+    },
+    {
+      "source": "category_4",
+      "target": "comment_397",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_83",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_84",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_97",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_101",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_102",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_114",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_338",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_350",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_352",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_360",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_368",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_381",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_386",
+      "value": 1
+    },
+    {
+      "source": "category_6",
+      "target": "comment_398",
+      "value": 1
+    },
+    {
+      "source": "category_1",
+      "target": "comment_110",
+      "value": 1
+    },
+    {
+      "source": "category_1",
+      "target": "comment_207",
+      "value": 1
+    },
+    {
+      "source": "category_1",
+      "target": "comment_212",
+      "value": 1
+    },
+    {
+      "source": "category_1",
+      "target": "comment_430",
+      "value": 1
+    },
+    {
+      "source": "category_1",
+      "target": "comment_454",
+      "value": 1
+    },
+    {
+      "source": "category_1",
+      "target": "comment_549",
+      "value": 1
+    },
+    {
+      "source": "category_1",
+      "target": "comment_854",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_197",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_210",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_287",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_327",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_341",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_464",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_494",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_496",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_530",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_581",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_584",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_596",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_614",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_633",
+      "value": 1
+    },
+    {
+      "source": "category_2",
+      "target": "comment_678",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_241",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_329",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_346",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_349",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_354",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_387",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_399",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_426",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_433",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_443",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_444",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_502",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_507",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_516",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_582",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_686",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_718",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_739",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_779",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_790",
+      "value": 1
+    },
+    {
+      "source": "category_0",
+      "target": "comment_827",
+      "value": 1
+    },
+    {
+      "source": "category_3",
+      "target": "comment_567",
+      "value": 1
+    },
+    {
+      "source": "category_3",
+      "target": "comment_587",
+      "value": 1
+    },
+    {
+      "source": "category_3",
+      "target": "comment_607",
+      "value": 1
+    },
+    {
+      "source": "category_3",
+      "target": "comment_616",
+      "value": 1
+    },
+    {
+      "source": "category_3",
+      "target": "comment_644",
+      "value": 1
+    },
+    {
+      "source": "category_3",
+      "target": "comment_662",
+      "value": 1
+    },
+    {
+      "source": "category_3",
+      "target": "comment_668",
+      "value": 1
+    },
+    {
+      "source": "category_3",
+      "target": "comment_828",
+      "value": 1
+    },
+    {
+      "source": "comment_19",
+      "target": "person",
+      "value": 1
+    },
+    {
+      "source": "comment_19",
+      "target": "door",
+      "value": 1
+    },
+    {
+      "source": "comment_20",
+      "target": "meet",
+      "value": 1
+    },
+    {
+      "source": "comment_20",
+      "target": "staff",
+      "value": 1
+    },
+    {
+      "source": "comment_21",
+      "target": "eager",
+      "value": 1
+    },
+    {
+      "source": "comment_21",
+      "target": "answer",
+      "value": 1
+    },
+    {
+      "source": "comment_21",
+      "target": "question",
+      "value": 1
+    },
+    {
+      "source": "comment_82",
+      "target": "charge",
+      "value": 1
+    },
+    {
+      "source": "comment_83",
+      "target": "attend",
+      "value": 1
+    },
+    {
+      "source": "comment_83",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "comment_83",
+      "target": "public",
+      "value": 1
+    },
+    {
+      "source": "comment_84",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "comment_84",
+      "target": "event",
+      "value": 1
+    },
+    {
+      "source": "comment_88",
+      "target": "discount",
+      "value": 1
+    },
+    {
+      "source": "comment_88",
+      "target": "service",
+      "value": 1
+    },
+    {
+      "source": "comment_88",
+      "target": "event",
+      "value": 1
+    },
+    {
+      "source": "comment_88",
+      "target": "price",
+      "value": 1
+    },
+    {
+      "source": "comment_92",
+      "target": "little",
+      "value": 1
+    },
+    {
+      "source": "comment_92",
+      "target": "expensive",
+      "value": 1
+    },
+    {
+      "source": "comment_92",
+      "target": "family",
+      "value": 1
+    },
+    {
+      "source": "comment_97",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "comment_97",
+      "target": "food",
+      "value": 1
+    },
+    {
+      "source": "comment_101",
+      "target": "idea",
+      "value": 1
+    },
+    {
+      "source": "comment_101",
+      "target": "far",
+      "value": 1
+    },
+    {
+      "source": "comment_102",
+      "target": "attend",
+      "value": 1
+    },
+    {
+      "source": "comment_102",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "comment_102",
+      "target": "class",
+      "value": 1
+    },
+    {
+      "source": "comment_110",
+      "target": "want",
+      "value": 1
+    },
+    {
+      "source": "comment_110",
+      "target": "experience",
+      "value": 1
+    },
+    {
+      "source": "comment_114",
+      "target": "event",
+      "value": 1
+    },
+    {
+      "source": "comment_114",
+      "target": "know",
+      "value": 1
+    },
+    {
+      "source": "comment_114",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "comment_197",
+      "target": "well",
+      "value": 1
+    },
+    {
+      "source": "comment_197",
+      "target": "class",
+      "value": 1
+    },
+    {
+      "source": "comment_207",
+      "target": "not",
+      "value": 1
+    },
+    {
+      "source": "comment_207",
+      "target": "experience",
+      "value": 1
+    },
+    {
+      "source": "comment_210",
+      "target": "great",
+      "value": 1
+    },
+    {
+      "source": "comment_212",
+      "target": "experience",
+      "value": 1
+    },
+    {
+      "source": "comment_212",
+      "target": "good",
+      "value": 1
+    },
+    {
+      "source": "comment_214",
+      "target": "speak",
+      "value": 1
+    },
+    {
+      "source": "comment_224",
+      "target": "welcoming",
+      "value": 1
+    },
+    {
+      "source": "comment_224",
+      "target": "professional",
+      "value": 1
+    },
+    {
+      "source": "comment_239",
+      "target": "clean",
+      "value": 1
+    },
+    {
+      "source": "comment_239",
+      "target": "welcome",
+      "value": 1
+    },
+    {
+      "source": "comment_241",
+      "target": "get",
+      "value": 1
+    },
+    {
+      "source": "comment_241",
+      "target": "difficult",
+      "value": 1
+    },
+    {
+      "source": "comment_287",
+      "target": "good",
+      "value": 1
+    },
+    {
+      "source": "comment_327",
+      "target": "believe",
+      "value": 1
+    },
+    {
+      "source": "comment_327",
+      "target": "good",
+      "value": 1
+    },
+    {
+      "source": "comment_329",
+      "target": "fund",
+      "value": 1
+    },
+    {
+      "source": "comment_329",
+      "target": "possible",
+      "value": 1
+    },
+    {
+      "source": "comment_337",
+      "target": "cost",
+      "value": 1
+    },
+    {
+      "source": "comment_337",
+      "target": "reasonable",
+      "value": 1
+    },
+    {
+      "source": "comment_338",
+      "target": "attend",
+      "value": 1
+    },
+    {
+      "source": "comment_338",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "comment_338",
+      "target": "event",
+      "value": 1
+    },
+    {
+      "source": "comment_341",
+      "target": "pretty",
+      "value": 1
+    },
+    {
+      "source": "comment_341",
+      "target": "good",
+      "value": 1
+    },
+    {
+      "source": "comment_346",
+      "target": "scholarship",
+      "value": 1
+    },
+    {
+      "source": "comment_346",
+      "target": "kid",
+      "value": 1
+    },
+    {
+      "source": "comment_346",
+      "target": "summer",
+      "value": 1
+    },
+    {
+      "source": "comment_346",
+      "target": "camp",
+      "value": 1
+    },
+    {
+      "source": "comment_349",
+      "target": "wish",
+      "value": 1
+    },
+    {
+      "source": "comment_349",
+      "target": "summer",
+      "value": 1
+    },
+    {
+      "source": "comment_350",
+      "target": "exhibit",
+      "value": 1
+    },
+    {
+      "source": "comment_350",
+      "target": "attend",
+      "value": 1
+    },
+    {
+      "source": "comment_350",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "comment_350",
+      "target": "appreciate",
+      "value": 1
+    },
+    {
+      "source": "comment_352",
+      "target": "never",
+      "value": 1
+    },
+    {
+      "source": "comment_352",
+      "target": "rent",
+      "value": 1
+    },
+    {
+      "source": "comment_352",
+      "target": "attend",
+      "value": 1
+    },
+    {
+      "source": "comment_354",
+      "target": "summer",
+      "value": 1
+    },
+    {
+      "source": "comment_368",
+      "target": "event",
+      "value": 1
+    },
+    {
+      "source": "comment_368",
+      "target": "attend",
+      "value": 1
+    },
+    {
+      "source": "comment_368",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "comment_381",
+      "target": "exhibit",
+      "value": 1
+    },
+    {
+      "source": "comment_381",
+      "target": "festival",
+      "value": 1
+    },
+    {
+      "source": "comment_381",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "comment_381",
+      "target": "affordable",
+      "value": 1
+    },
+    {
+      "source": "comment_386",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "comment_386",
+      "target": "event",
+      "value": 1
+    },
+    {
+      "source": "comment_387",
+      "target": "summer",
+      "value": 1
+    },
+    {
+      "source": "comment_387",
+      "target": "cost",
+      "value": 1
+    },
+    {
+      "source": "comment_387",
+      "target": "prohibitive",
+      "value": 1
+    },
+    {
+      "source": "comment_397",
+      "target": "expensive",
+      "value": 1
+    },
+    {
+      "source": "comment_397",
+      "target": "cost",
+      "value": 1
+    },
+    {
+      "source": "comment_397",
+      "target": "common",
+      "value": 1
+    },
+    {
+      "source": "comment_398",
+      "target": "enjoy",
+      "value": 1
+    },
+    {
+      "source": "comment_398",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "comment_398",
+      "target": "accessible",
+      "value": 1
+    },
+    {
+      "source": "comment_426",
+      "target": "camp",
+      "value": 1
+    },
+    {
+      "source": "comment_430",
+      "target": "wonderful",
+      "value": 1
+    },
+    {
+      "source": "comment_430",
+      "target": "experience",
+      "value": 1
+    },
+    {
+      "source": "comment_433",
+      "target": "great",
+      "value": 1
+    },
+    {
+      "source": "comment_433",
+      "target": "summer",
+      "value": 1
+    },
+    {
+      "source": "comment_433",
+      "target": "camp",
+      "value": 1
+    },
+    {
+      "source": "comment_443",
+      "target": "awesome",
+      "value": 1
+    },
+    {
+      "source": "comment_443",
+      "target": "summer",
+      "value": 1
+    },
+    {
+      "source": "comment_443",
+      "target": "camp",
+      "value": 1
+    },
+    {
+      "source": "comment_454",
+      "target": "experience",
+      "value": 1
+    },
+    {
+      "source": "comment_464",
+      "target": "great",
+      "value": 1
+    },
+    {
+      "source": "comment_494",
+      "target": "love",
+      "value": 1
+    },
+    {
+      "source": "comment_496",
+      "target": "good",
+      "value": 1
+    },
+    {
+      "source": "comment_502",
+      "target": "summer",
+      "value": 1
+    },
+    {
+      "source": "comment_502",
+      "target": "camp",
+      "value": 1
+    },
+    {
+      "source": "comment_502",
+      "target": "kid",
+      "value": 1
+    },
+    {
+      "source": "comment_502",
+      "target": "excellent",
+      "value": 1
+    },
+    {
+      "source": "comment_507",
+      "target": "camp",
+      "value": 1
+    },
+    {
+      "source": "comment_516",
+      "target": "camp",
+      "value": 1
+    },
+    {
+      "source": "comment_530",
+      "target": "love",
+      "value": 1
+    },
+    {
+      "source": "comment_549",
+      "target": "show",
+      "value": 1
+    },
+    {
+      "source": "comment_549",
+      "target": "friend",
+      "value": 1
+    },
+    {
+      "source": "comment_567",
+      "target": "martinez",
+      "value": 1
+    },
+    {
+      "source": "comment_567",
+      "target": "appreciate",
+      "value": 1
+    },
+    {
+      "source": "comment_567",
+      "target": "garden",
+      "value": 1
+    },
+    {
+      "source": "comment_568",
+      "target": "welcome",
+      "value": 1
+    },
+    {
+      "source": "comment_581",
+      "target": "love",
+      "value": 1
+    },
+    {
+      "source": "comment_582",
+      "target": "summer",
+      "value": 1
+    },
+    {
+      "source": "comment_582",
+      "target": "camp",
+      "value": 1
+    },
+    {
+      "source": "comment_582",
+      "target": "great",
+      "value": 1
+    },
+    {
+      "source": "comment_583",
+      "target": "helpful",
+      "value": 1
+    },
+    {
+      "source": "comment_584",
+      "target": "ok",
+      "value": 1
+    },
+    {
+      "source": "comment_587",
+      "target": "herlinda",
+      "value": 1
+    },
+    {
+      "source": "comment_587",
+      "target": "zamora",
+      "value": 1
+    },
+    {
+      "source": "comment_587",
+      "target": "main",
+      "value": 1
+    },
+    {
+      "source": "comment_587",
+      "target": "office",
+      "value": 1
+    },
+    {
+      "source": "comment_596",
+      "target": "good",
+      "value": 1
+    },
+    {
+      "source": "comment_601",
+      "target": "kind",
+      "value": 1
+    },
+    {
+      "source": "comment_607",
+      "target": "know",
+      "value": 1
+    },
+    {
+      "source": "comment_607",
+      "target": "herlinda",
+      "value": 1
+    },
+    {
+      "source": "comment_607",
+      "target": "time",
+      "value": 1
+    },
+    {
+      "source": "comment_607",
+      "target": "work",
+      "value": 1
+    },
+    {
+      "source": "comment_613",
+      "target": "manager",
+      "value": 1
+    },
+    {
+      "source": "comment_613",
+      "target": "rude",
+      "value": 1
+    },
+    {
+      "source": "comment_614",
+      "target": "fantastic",
+      "value": 1
+    },
+    {
+      "source": "comment_616",
+      "target": "miss",
+      "value": 1
+    },
+    {
+      "source": "comment_622",
+      "target": "pleasant",
+      "value": 1
+    },
+    {
+      "source": "comment_622",
+      "target": "helpful",
+      "value": 1
+    },
+    {
+      "source": "comment_633",
+      "target": "great",
+      "value": 1
+    },
+    {
+      "source": "comment_633",
+      "target": "job",
+      "value": 1
+    },
+    {
+      "source": "comment_652",
+      "target": "management",
+      "value": 1
+    },
+    {
+      "source": "comment_652",
+      "target": "rude",
+      "value": 1
+    },
+    {
+      "source": "comment_662",
+      "target": "herlinda",
+      "value": 1
+    },
+    {
+      "source": "comment_662",
+      "target": "zamora",
+      "value": 1
+    },
+    {
+      "source": "comment_662",
+      "target": "group",
+      "value": 1
+    },
+    {
+      "source": "comment_668",
+      "target": "high",
+      "value": 1
+    },
+    {
+      "source": "comment_668",
+      "target": "school",
+      "value": 1
+    },
+    {
+      "source": "comment_668",
+      "target": "student",
+      "value": 1
+    },
+    {
+      "source": "comment_668",
+      "target": "person",
+      "value": 1
+    },
+    {
+      "source": "comment_678",
+      "target": "thank",
+      "value": 1
+    },
+    {
+      "source": "comment_686",
+      "target": "big",
+      "value": 1
+    },
+    {
+      "source": "comment_686",
+      "target": "transportation",
+      "value": 1
+    },
+    {
+      "source": "comment_686",
+      "target": "issue",
+      "value": 1
+    },
+    {
+      "source": "comment_718",
+      "target": "camp",
+      "value": 1
+    },
+    {
+      "source": "comment_718",
+      "target": "affordable",
+      "value": 1
+    },
+    {
+      "source": "comment_718",
+      "target": "quality",
+      "value": 1
+    },
+    {
+      "source": "comment_718",
+      "target": "programming",
+      "value": 1
+    },
+    {
+      "source": "comment_739",
+      "target": "mission",
+      "value": 1
+    },
+    {
+      "source": "comment_739",
+      "target": "neighborhood",
+      "value": 1
+    },
+    {
+      "source": "comment_779",
+      "target": "summer",
+      "value": 1
+    },
+    {
+      "source": "comment_779",
+      "target": "camp",
+      "value": 1
+    },
+    {
+      "source": "comment_790",
+      "target": "attend",
+      "value": 1
+    },
+    {
+      "source": "comment_828",
+      "target": "director",
+      "value": 1
+    },
+    {
+      "source": "comment_828",
+      "target": "leave",
+      "value": 1
+    },
+    {
+      "source": "comment_828",
+      "target": "knowledgeable",
+      "value": 1
+    },
+    {
+      "source": "comment_838",
+      "target": "staff",
+      "value": 1
+    },
+    {
+      "source": "comment_838",
+      "target": "rude",
+      "value": 1
+    },
+    {
+      "source": "comment_841",
+      "target": "kind",
+      "value": 1
+    },
+    {
+      "source": "comment_842",
+      "target": "pleasant",
+      "value": 1
+    },
+    {
+      "source": "comment_850",
+      "target": "extremely",
+      "value": 1
+    },
+    {
+      "source": "comment_850",
+      "target": "friendly",
+      "value": 1
+    },
+    {
+      "source": "comment_850",
+      "target": "helpful",
+      "value": 1
+    },
+    {
+      "source": "comment_854",
+      "target": "good",
+      "value": 1
+    },
+    {
+      "source": "comment_854",
+      "target": "experience",
+      "value": 1
+    },
+    {
+      "source": "comment_856",
+      "target": "helpful",
+      "value": 1
+    },
+    {
+      "source": "person",
+      "target": "door",
+      "value": 1
+    },
+    {
+      "source": "meet",
+      "target": "staff",
+      "value": 1
+    },
+    {
+      "source": "staff",
+      "target": "rude",
+      "value": 1
+    },
+    {
+      "source": "eager",
+      "target": "answer",
+      "value": 1
+    },
+    {
+      "source": "answer",
+      "target": "question",
+      "value": 1
+    },
+    {
+      "source": "attend",
+      "target": "free",
+      "value": 5
+    },
+    {
+      "source": "free",
+      "target": "public",
+      "value": 1
+    },
+    {
+      "source": "free",
+      "target": "event",
+      "value": 3
+    },
+    {
+      "source": "free",
+      "target": "food",
+      "value": 1
+    },
+    {
+      "source": "free",
+      "target": "class",
+      "value": 1
+    },
+    {
+      "source": "free",
+      "target": "appreciate",
+      "value": 1
+    },
+    {
+      "source": "free",
+      "target": "affordable",
+      "value": 1
+    },
+    {
+      "source": "free",
+      "target": "accessible",
+      "value": 1
+    },
+    {
+      "source": "event",
+      "target": "price",
+      "value": 1
+    },
+    {
+      "source": "event",
+      "target": "know",
+      "value": 1
+    },
+    {
+      "source": "event",
+      "target": "attend",
+      "value": 1
+    },
+    {
+      "source": "discount",
+      "target": "service",
+      "value": 1
+    },
+    {
+      "source": "service",
+      "target": "event",
+      "value": 1
+    },
+    {
+      "source": "little",
+      "target": "expensive",
+      "value": 1
+    },
+    {
+      "source": "expensive",
+      "target": "family",
+      "value": 1
+    },
+    {
+      "source": "expensive",
+      "target": "cost",
+      "value": 1
+    },
+    {
+      "source": "idea",
+      "target": "far",
+      "value": 1
+    },
+    {
+      "source": "want",
+      "target": "experience",
+      "value": 1
+    },
+    {
+      "source": "experience",
+      "target": "good",
+      "value": 1
+    },
+    {
+      "source": "know",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "know",
+      "target": "herlinda",
+      "value": 1
+    },
+    {
+      "source": "well",
+      "target": "class",
+      "value": 1
+    },
+    {
+      "source": "not",
+      "target": "experience",
+      "value": 1
+    },
+    {
+      "source": "great",
+      "target": "summer",
+      "value": 1
+    },
+    {
+      "source": "great",
+      "target": "job",
+      "value": 1
+    },
+    {
+      "source": "good",
+      "target": "experience",
+      "value": 1
+    },
+    {
+      "source": "welcoming",
+      "target": "professional",
+      "value": 1
+    },
+    {
+      "source": "clean",
+      "target": "welcome",
+      "value": 1
+    },
+    {
+      "source": "get",
+      "target": "difficult",
+      "value": 1
+    },
+    {
+      "source": "believe",
+      "target": "good",
+      "value": 1
+    },
+    {
+      "source": "fund",
+      "target": "possible",
+      "value": 1
+    },
+    {
+      "source": "cost",
+      "target": "reasonable",
+      "value": 1
+    },
+    {
+      "source": "cost",
+      "target": "prohibitive",
+      "value": 1
+    },
+    {
+      "source": "cost",
+      "target": "common",
+      "value": 1
+    },
+    {
+      "source": "pretty",
+      "target": "good",
+      "value": 1
+    },
+    {
+      "source": "scholarship",
+      "target": "kid",
+      "value": 1
+    },
+    {
+      "source": "kid",
+      "target": "summer",
+      "value": 1
+    },
+    {
+      "source": "kid",
+      "target": "excellent",
+      "value": 1
+    },
+    {
+      "source": "summer",
+      "target": "camp",
+      "value": 6
+    },
+    {
+      "source": "summer",
+      "target": "cost",
+      "value": 1
+    },
+    {
+      "source": "camp",
+      "target": "kid",
+      "value": 1
+    },
+    {
+      "source": "camp",
+      "target": "great",
+      "value": 1
+    },
+    {
+      "source": "camp",
+      "target": "affordable",
+      "value": 1
+    },
+    {
+      "source": "wish",
+      "target": "summer",
+      "value": 1
+    },
+    {
+      "source": "exhibit",
+      "target": "attend",
+      "value": 1
+    },
+    {
+      "source": "exhibit",
+      "target": "festival",
+      "value": 1
+    },
+    {
+      "source": "appreciate",
+      "target": "garden",
+      "value": 1
+    },
+    {
+      "source": "never",
+      "target": "rent",
+      "value": 1
+    },
+    {
+      "source": "rent",
+      "target": "attend",
+      "value": 1
+    },
+    {
+      "source": "festival",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "affordable",
+      "target": "quality",
+      "value": 1
+    },
+    {
+      "source": "enjoy",
+      "target": "free",
+      "value": 1
+    },
+    {
+      "source": "wonderful",
+      "target": "experience",
+      "value": 1
+    },
+    {
+      "source": "awesome",
+      "target": "summer",
+      "value": 1
+    },
+    {
+      "source": "show",
+      "target": "friend",
+      "value": 1
+    },
+    {
+      "source": "martinez",
+      "target": "appreciate",
+      "value": 1
+    },
+    {
+      "source": "herlinda",
+      "target": "zamora",
+      "value": 2
+    },
+    {
+      "source": "herlinda",
+      "target": "time",
+      "value": 1
+    },
+    {
+      "source": "zamora",
+      "target": "main",
+      "value": 1
+    },
+    {
+      "source": "zamora",
+      "target": "group",
+      "value": 1
+    },
+    {
+      "source": "main",
+      "target": "office",
+      "value": 1
+    },
+    {
+      "source": "time",
+      "target": "work",
+      "value": 1
+    },
+    {
+      "source": "manager",
+      "target": "rude",
+      "value": 1
+    },
+    {
+      "source": "pleasant",
+      "target": "helpful",
+      "value": 1
+    },
+    {
+      "source": "management",
+      "target": "rude",
+      "value": 1
+    },
+    {
+      "source": "high",
+      "target": "school",
+      "value": 1
+    },
+    {
+      "source": "school",
+      "target": "student",
+      "value": 1
+    },
+    {
+      "source": "student",
+      "target": "person",
+      "value": 1
+    },
+    {
+      "source": "big",
+      "target": "transportation",
+      "value": 1
+    },
+    {
+      "source": "transportation",
+      "target": "issue",
+      "value": 1
+    },
+    {
+      "source": "quality",
+      "target": "programming",
+      "value": 1
+    },
+    {
+      "source": "mission",
+      "target": "neighborhood",
+      "value": 1
+    },
+    {
+      "source": "director",
+      "target": "leave",
+      "value": 1
+    },
+    {
+      "source": "leave",
+      "target": "knowledgeable",
+      "value": 1
+    },
+    {
+      "source": "extremely",
+      "target": "friendly",
+      "value": 1
+    },
+    {
+      "source": "friendly",
+      "target": "helpful",
+      "value": 1
+    }
+  ]
+}
