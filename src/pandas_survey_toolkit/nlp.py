@@ -21,7 +21,7 @@ from pandas_survey_toolkit.utils import (apply_vectorizer, combine_results,
 @pf.register_dataframe_method
 def cluster_questions(df, columns=None, pattern=None, likert_mapping=None, 
                       umap_n_neighbors=15, umap_min_dist=0.1,
-                      hdbscan_min_cluster_size=5, hdbscan_min_samples=None):
+                      hdbscan_min_cluster_size=20, hdbscan_min_samples=None):
     """
     Cluster Likert scale questions based on response patterns.
     
@@ -52,12 +52,12 @@ def cluster_questions(df, columns=None, pattern=None, likert_mapping=None,
     
    
     # Apply UMAP
-    df = df.fit_umap(input_columns=encoded_columns, n_neighbors=umap_n_neighbors, 
+    df = df.fit_umap(input_columns=encoded_columns, output_columns = ["likert_umap_x", "likert_umap_y"], n_neighbors=umap_n_neighbors, 
                      min_dist=umap_min_dist,
                      metric='cosine')
     
     # Apply HDBSCAN
-    df = df.fit_cluster_hdbscan(input_columns=['umap_x', 'umap_y'], 
+    df = df.fit_cluster_hdbscan(input_columns=["likert_umap_x", "likert_umap_y"], 
                                 output_columns=['question_cluster_id', 'question_cluster_probability'],
                                 min_cluster_size=hdbscan_min_cluster_size, 
                                 min_samples=hdbscan_min_samples)
@@ -67,7 +67,7 @@ def cluster_questions(df, columns=None, pattern=None, likert_mapping=None,
 
 
 @pf.register_dataframe_method
-def encode_likert(df, likert_columns, output_prefix='likert_encoded_', custom_mapping=None):
+def encode_likert(df, likert_columns, output_prefix='likert_encoded_', custom_mapping=None, debug=True):
     """
     Encode Likert scale responses to numeric values.
     
@@ -76,6 +76,7 @@ def encode_likert(df, likert_columns, output_prefix='likert_encoded_', custom_ma
     likert_columns (list): List of column names containing Likert scale responses.
     output_prefix (str): Prefix for the new encoded columns. Default is 'likert_encoded_'.
     custom_mapping (dict): Optional custom mapping for Likert scale responses.
+    debug (bool): Prints out the mappings
     
     Returns:
     pandas.DataFrame: The input DataFrame with additional columns for encoded Likert responses.
@@ -101,16 +102,17 @@ def encode_likert(df, likert_columns, output_prefix='likert_encoded_', custom_ma
         # Unable to classify
         return None
         
-    conversion_summary = defaultdict(lambda: defaultdict(int))
+    conversion_summary = defaultdict(int)
     unconverted_phrases = set()
 
     if custom_mapping is None:
         mapping_func = default_mapping
-        print("Using default mapping:")
-        print("-1: Phrases containing 'disagree', 'do not agree', etc.")
-        print(" 0: Phrases containing 'neutral', 'neither', 'unsure', etc.")
-        print("+1: Phrases containing 'agree' (but not 'disagree' or 'not agree')")
-        print("NaN: NaN values are preserved")
+        if debug:
+            print("Using default mapping:")
+            print("-1: Phrases containing 'disagree', 'do not agree', etc.")
+            print(" 0: Phrases containing 'neutral', 'neither', 'unsure', etc.")
+            print("+1: Phrases containing 'agree' (but not 'disagree' or 'not agree')")
+            print("NaN: NaN values are preserved")
     else:
         def mapping_func(response):
             if pd.isna(response):
@@ -120,22 +122,20 @@ def encode_likert(df, likert_columns, output_prefix='likert_encoded_', custom_ma
                 unconverted_phrases.add(str(response))
                 return pd.NA
             return converted
-        print("Using custom mapping:", custom_mapping)
-        print("NaN: NaN values are preserved")
-    
+        if debug:
+            print("Using custom mapping:", custom_mapping)
+            print("NaN: NaN values are preserved")
+        
     for column in likert_columns:
         output_column = f"{output_prefix}{column}"
         df[output_column] = df[column].apply(lambda x: mapping_func(x))
         
         # Update conversion summary
         for original, converted in zip(df[column], df[output_column]):
-            conversion_summary[column][f"{original} -> {converted}"] += 1
+            conversion_summary[f"{original} -> {converted}"] += 1
     
-    # Print conversion summary
-    print("\nConversion Summary:")
-    for column, summary in conversion_summary.items():
-        print(f"\nColumn: {column}")
-        for conversion, count in summary.items():
+    if debug:
+        for conversion, count in conversion_summary.items():
             print(f"  {conversion}: {count} times")
     
     # Alert about unconverted phrases
