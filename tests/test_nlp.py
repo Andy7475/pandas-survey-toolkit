@@ -29,15 +29,15 @@ def test_cluster_questions_columns(sample_df):
     result = sample_df.cluster_questions(columns=['Q1', 'Q2', 'Q3', 'Q4'])
     assert 'question_cluster_id' in result.columns
     assert 'question_cluster_probability' in result.columns
-    assert 'umap_x' in result.columns
-    assert 'umap_y' in result.columns
+    assert 'likert_umap_x' in result.columns
+    assert 'likert_umap_y' in result.columns
 
 def test_cluster_questions_pattern(sample_df):
     result = sample_df.cluster_questions(pattern='^Q')
     assert 'question_cluster_id' in result.columns
     assert 'question_cluster_probability' in result.columns
-    assert 'umap_x' in result.columns
-    assert 'umap_y' in result.columns
+    assert 'likert_umap_x' in result.columns
+    assert 'likert_umap_y' in result.columns
 
 def test_cluster_questions_custom_mapping(sample_df):
     custom_mapping = {
@@ -54,8 +54,8 @@ def test_cluster_questions_custom_mapping(sample_df):
 def test_cluster_questions_umap_parameters(sample_df):
     result = sample_df.cluster_questions(columns=['Q1', 'Q2', 'Q3', 'Q4'], 
                                          umap_n_neighbors=10, umap_min_dist=0.05)
-    assert 'umap_x' in result.columns
-    assert 'umap_y' in result.columns
+    assert 'likert_umap_x' in result.columns
+    assert 'likert_umap_y' in result.columns
 
 def test_cluster_questions_hdbscan_parameters(sample_df):
     result = sample_df.cluster_questions(columns=['Q1', 'Q2', 'Q3', 'Q4'], 
