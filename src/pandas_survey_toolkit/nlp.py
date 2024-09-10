@@ -152,6 +152,7 @@ def encode_likert(df, likert_columns, output_prefix='likert_encoded_', custom_ma
             warnings.warn(f"The default mapping didn't convert the following responses: {', '.join(unconverted)}")
     
     return df
+
 @pf.register_dataframe_method
 def extract_keywords(df: pd.DataFrame, 
                      input_column: str, 
@@ -163,6 +164,7 @@ def extract_keywords(df: pd.DataFrame,
                      threshold: float = 0.4,
                      ngram_range: Tuple[int, int] = (1, 1),
                      min_df: int = 5,
+                     keyword_min_count: int = 3,
                      **kwargs) -> pd.DataFrame:
     """
     Apply a pipeline of text preprocessing, spaCy processing, lemmatization, and TF-IDF
@@ -207,8 +209,79 @@ def extract_keywords(df: pd.DataFrame,
                       ngram_range=ngram_range,
                       min_df=min_df,
                       **kwargs.get('tfidf_kwargs', {}))
+    
+    df = df.refine_keywords(keyword_column = output_column,
+                            text_column = lemma_column,
+                            min_count = keyword_min_count,
+                            output_column = "refined_keywords")
 
     return df
+
+@pf.register_dataframe_method
+def refine_keywords(df: pd.DataFrame, 
+                    keyword_column: str = 'keywords', 
+                    text_column: str = 'lemmatized_text', 
+                    min_count: int = 3,
+                    output_column: str = None) -> pd.DataFrame:
+    """
+    Refine keywords by replacing rare keywords with more common ones based on the text content.
+    
+    Parameters:
+    df (pd.DataFrame): The input DataFrame.
+    keyword_column (str): Name of the column containing keyword lists.
+    text_column (str): Name of the column containing the original text.
+    min_count (int): Minimum count for a keyword to be considered common.
+    
+    Returns:
+    pd.DataFrame: The input DataFrame with refined keywords.
+    """
+
+    if output_column is None:
+        output_column = keyword_column
+    # Create masked DataFrame
+    masked_df, mask = create_masked_df(df, [keyword_column, text_column])
+    
+    # Step 1 & 2: Collect all keywords and count them
+    all_keywords = [keyword for keywords in masked_df[keyword_column] if isinstance(keywords, list) for keyword in keywords]
+    keyword_counts = pd.Series(all_keywords).value_counts()
+    
+    # Separate common and rare keywords
+    common_keywords = set(keyword_counts[keyword_counts >= min_count].index)
+    rare_keywords = set(keyword_counts[keyword_counts < min_count].index)
+    
+    def refine_row_keywords(row):
+        if pd.isna(row[text_column]) or not isinstance(row[keyword_column], list):
+            return row[keyword_column]
+        
+        text = str(row[text_column]).lower()
+        current_keywords = row[keyword_column]
+        refined_keywords = []
+        
+        for keyword in current_keywords:
+            if keyword in common_keywords:
+                refined_keywords.append(keyword)
+            elif keyword in rare_keywords:
+                # Find a replacement from common keywords
+                replacement = None
+                for common_keyword in sorted(common_keywords, key=lambda k: (-keyword_counts[k], len(k))):
+                    if common_keyword in text and common_keyword not in refined_keywords:
+                        replacement = common_keyword
+                        break
+                
+                if replacement:
+                    refined_keywords.append(replacement)
+                # If no replacement found, the rare keyword is simply omitted
+        
+        # Ensure correct ordering based on appearance in the original text
+        return sorted(refined_keywords, key=lambda k: text.index(k)) if refined_keywords else []
+    
+    # Apply the refinement to each row
+    masked_df[output_column] = masked_df.apply(refine_row_keywords, axis=1)
+    
+    # Combine results
+    df_to_return = combine_results(df, masked_df, mask, [output_column])
+    
+    return df_to_return
 
 @pf.register_dataframe_method
 def remove_short_comments(df: pd.DataFrame, 
