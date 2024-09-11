@@ -379,7 +379,7 @@ def cluster_comments(df:pd.DataFrame, input_column:str, output_columns:str=["clu
                                                  output_column="sentence_embedding")
                     .fit_umap(input_columns="sentence_embedding",
                               embeddings_in_list=True)
-                    .fit_cluster_hdbscan(output_columns=output_columns))
+                    .fit_cluster_hdbscan(output_columns=output_columns, min_cluster_size=5))
     
     return df_temp
 
