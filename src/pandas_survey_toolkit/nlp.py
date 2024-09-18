@@ -18,6 +18,7 @@ from pandas_survey_toolkit.analytics import fit_cluster_hdbscan, fit_umap
 from pandas_survey_toolkit.utils import (apply_vectorizer, combine_results,
                                          create_masked_df)
 
+
 @pf.register_dataframe_method
 def cluster_questions(df, columns=None, pattern=None, likert_mapping=None, 
                       umap_n_neighbors=15, umap_min_dist=0.1,
@@ -164,7 +165,7 @@ def extract_keywords(df: pd.DataFrame,
                      threshold: float = 0.4,
                      ngram_range: Tuple[int, int] = (1, 1),
                      min_df: int = 5,
-                     keyword_min_count: int = 3,
+                     min_proportion_with_keywords: float = 0.95,
                      **kwargs) -> pd.DataFrame:
     """
     Apply a pipeline of text preprocessing, spaCy processing, lemmatization, and TF-IDF
@@ -187,22 +188,27 @@ def extract_keywords(df: pd.DataFrame,
     pandas.DataFrame: The input DataFrame with additional columns for preprocessed text,
                       spaCy output, lemmatized text, and extracted keywords.
     """
+
+    df_temp = df.copy()
     # Step 1: Preprocess text
-    df = df.preprocess_text(input_column=input_column, 
+    df_temp = df_temp.preprocess_text(input_column=input_column, 
                             output_column=preprocessed_column, 
                             **kwargs.get('preprocess_kwargs', {}))
 
+    df_temp = df_temp.remove_short_comments(input_column=input_column,
+                            min_comment_length=5)
+
     # Step 2: Apply spaCy
-    df = df.fit_spacy(input_column=preprocessed_column, 
+    df_temp = df_temp.fit_spacy(input_column=preprocessed_column, 
                       output_column=spacy_column)
 
     # Step 3: Get lemmatized text
-    df = df.get_lemma(input_column=spacy_column, 
+    df_temp = df_temp.get_lemma(input_column=spacy_column, 
                       output_column=lemma_column, 
                       **kwargs.get('lemma_kwargs', {}))
 
     # Step 4: Apply TF-IDF and extract keywords
-    df = df.fit_tfidf(input_column=lemma_column, 
+    df_temp = df_temp.fit_tfidf(input_column=lemma_column, 
                       output_column=output_column,
                       top_n=top_n,
                       threshold=threshold,
@@ -210,19 +216,25 @@ def extract_keywords(df: pd.DataFrame,
                       min_df=min_df,
                       **kwargs.get('tfidf_kwargs', {}))
     
-    df = df.refine_keywords(keyword_column = output_column,
+    df_temp = df_temp.refine_keywords(keyword_column = output_column,
                             text_column = lemma_column,
-                            min_count = keyword_min_count,
+                            min_proportion = min_proportion_with_keywords,
                             output_column = "refined_keywords")
 
-    return df
+    return df_temp
+
+import pandas as pd
+import numpy as np
+from typing import Union
 
 @pf.register_dataframe_method
 def refine_keywords(df: pd.DataFrame, 
                     keyword_column: str = 'keywords', 
                     text_column: str = 'lemmatized_text', 
-                    min_count: int = 3,
-                    output_column: str = None) -> pd.DataFrame:
+                    min_count: Union[int, None] = None,
+                    min_proportion: float = 0.95,
+                    output_column: str = None,
+                    debug: bool = True) -> pd.DataFrame:
     """
     Refine keywords by replacing rare keywords with more common ones based on the text content.
     
@@ -230,14 +242,17 @@ def refine_keywords(df: pd.DataFrame,
     df (pd.DataFrame): The input DataFrame.
     keyword_column (str): Name of the column containing keyword lists.
     text_column (str): Name of the column containing the original text.
-    min_count (int): Minimum count for a keyword to be considered common.
+    min_count (int, optional): Minimum count for a keyword to be considered common. If None, it will be determined automatically.
+    min_proportion (float): Minimum proportion of rows that should have keywords after refinement. Used only if min_count is None. Default is 0.95.
+    output_column (str): Column name for the refined keyword output. If it is None, then the keyword_column is over-written.
+    debug (bool): If True, print detailed statistics about the refinement process. Default is False.
     
     Returns:
     pd.DataFrame: The input DataFrame with refined keywords.
     """
-
     if output_column is None:
         output_column = keyword_column
+
     # Create masked DataFrame
     masked_df, mask = create_masked_df(df, [keyword_column, text_column])
     
@@ -245,13 +260,9 @@ def refine_keywords(df: pd.DataFrame,
     all_keywords = [keyword for keywords in masked_df[keyword_column] if isinstance(keywords, list) for keyword in keywords]
     keyword_counts = pd.Series(all_keywords).value_counts()
     
-    # Separate common and rare keywords
-    common_keywords = set(keyword_counts[keyword_counts >= min_count].index)
-    rare_keywords = set(keyword_counts[keyword_counts < min_count].index)
-    
-    def refine_row_keywords(row):
+    def refine_row_keywords(row, common_keywords):
         if pd.isna(row[text_column]) or not isinstance(row[keyword_column], list):
-            return row[keyword_column]
+            return []
         
         text = str(row[text_column]).lower()
         current_keywords = row[keyword_column]
@@ -260,26 +271,52 @@ def refine_keywords(df: pd.DataFrame,
         for keyword in current_keywords:
             if keyword in common_keywords:
                 refined_keywords.append(keyword)
-            elif keyword in rare_keywords:
+            else:
                 # Find a replacement from common keywords
-                replacement = None
                 for common_keyword in sorted(common_keywords, key=lambda k: (-keyword_counts[k], len(k))):
                     if common_keyword in text and common_keyword not in refined_keywords:
-                        replacement = common_keyword
+                        refined_keywords.append(common_keyword)
                         break
-                
-                if replacement:
-                    refined_keywords.append(replacement)
-                # If no replacement found, the rare keyword is simply omitted
         
         # Ensure correct ordering based on appearance in the original text
         return sorted(refined_keywords, key=lambda k: text.index(k)) if refined_keywords else []
+
+    if min_count is None:
+        # Determine min_count automatically
+        def get_proportion_with_keywords(count):
+            common_keywords = set(keyword_counts[keyword_counts >= count].index)
+            refined_keywords = masked_df.apply(lambda row: refine_row_keywords(row, common_keywords), axis=1)
+            return (refined_keywords.str.len() > 0).mean()
+        
+        min_count = 1
+        while get_proportion_with_keywords(min_count) > min_proportion:
+            min_count += 1
+        min_count -= 1  # Go back one step to ensure we're above the min_proportion
+    
+    # Separate common and rare keywords
+    common_keywords = set(keyword_counts[keyword_counts >= min_count].index)
     
     # Apply the refinement to each row
-    masked_df[output_column] = masked_df.apply(refine_row_keywords, axis=1)
+    masked_df[output_column] = masked_df.apply(lambda row: refine_row_keywords(row, common_keywords), axis=1)
     
     # Combine results
     df_to_return = combine_results(df, masked_df, mask, [output_column])
+    
+    if debug:
+        # Calculate statistics
+        original_keyword_count = masked_df[keyword_column].apply(lambda x: len(x) if isinstance(x, list) else 0)
+        refined_keyword_count = masked_df[output_column].apply(len)
+        
+        original_unique_keywords = set(keyword for keywords in masked_df[keyword_column] if isinstance(keywords, list) for keyword in keywords)
+        refined_unique_keywords = set(keyword for keywords in masked_df[output_column] for keyword in keywords)
+        
+        print(f"Refinement complete. Min count used: {min_count}")
+        print(f"Original average keywords per row: {original_keyword_count.mean():.2f}")
+        print(f"Refined average keywords per row: {refined_keyword_count.mean():.2f}")
+        print(f"Proportion of rows with keywords after refinement: {(refined_keyword_count > 0).mean():.2%}")
+        print(f"Total unique keywords before refinement: {len(original_unique_keywords)}")
+        print(f"Total unique keywords after refinement: {len(refined_unique_keywords)}")
+        print(f"Reduction in unique keywords: {(1 - len(refined_unique_keywords) / len(original_unique_keywords)):.2%}")
     
     return df_to_return
 
@@ -379,7 +416,7 @@ def cluster_comments(df:pd.DataFrame, input_column:str, output_columns:str=["clu
                                                  output_column="sentence_embedding")
                     .fit_umap(input_columns="sentence_embedding",
                               embeddings_in_list=True)
-                    .fit_cluster_hdbscan(output_columns=output_columns))
+                    .fit_cluster_hdbscan(output_columns=output_columns, min_cluster_size=5))
     
     return df_temp
 
