@@ -22,7 +22,8 @@ from pandas_survey_toolkit.utils import (apply_vectorizer, combine_results,
 @pf.register_dataframe_method
 def cluster_questions(df, columns=None, pattern=None, likert_mapping=None, 
                       umap_n_neighbors=15, umap_min_dist=0.1,
-                      hdbscan_min_cluster_size=20, hdbscan_min_samples=None):
+                      hdbscan_min_cluster_size=20, hdbscan_min_samples=None,
+                      cluster_selection_epsilon=0.4):
     """
     Cluster Likert scale questions based on response patterns.
     
@@ -61,7 +62,9 @@ def cluster_questions(df, columns=None, pattern=None, likert_mapping=None,
     df = df.fit_cluster_hdbscan(input_columns=["likert_umap_x", "likert_umap_y"], 
                                 output_columns=['question_cluster_id', 'question_cluster_probability'],
                                 min_cluster_size=hdbscan_min_cluster_size, 
-                                min_samples=hdbscan_min_samples)
+                                min_samples=hdbscan_min_samples,
+                                cluster_selection_epsilon=cluster_selection_epsilon
+                                )
     
    
     return df
@@ -223,9 +226,6 @@ def extract_keywords(df: pd.DataFrame,
 
     return df_temp
 
-import pandas as pd
-import numpy as np
-from typing import Union
 
 @pf.register_dataframe_method
 def refine_keywords(df: pd.DataFrame, 
@@ -406,7 +406,7 @@ def extract_sentiment(df, input_column: str, output_columns=["positive", "neutra
     return df_to_return
 
 @pf.register_dataframe_method
-def cluster_comments(df:pd.DataFrame, input_column:str, output_columns:str=["cluster", "cluster_probability"]):
+def cluster_comments(df:pd.DataFrame, input_column:str, output_columns:str=["cluster", "cluster_probability"], min_cluster_size=5, cluster_selection_epsilon:float=0.2, n_neighbors:int=15):
     """applies a pipeline of 1) vector embeddings 2) dimensional reduction 3) clustering
     to assign each row a cluster ID so that similar free text comments (found in the input_column) can be grouped together.
     Returns a modified dataframe. If you want control over parameters for the various functions,
@@ -415,8 +415,9 @@ def cluster_comments(df:pd.DataFrame, input_column:str, output_columns:str=["clu
     df_temp = (df.fit_sentence_transformer(input_column = input_column,
                                                  output_column="sentence_embedding")
                     .fit_umap(input_columns="sentence_embedding",
-                              embeddings_in_list=True)
-                    .fit_cluster_hdbscan(output_columns=output_columns, min_cluster_size=5))
+                              embeddings_in_list=True,
+                              n_neighbors=n_neighbors)
+                    .fit_cluster_hdbscan(output_columns=output_columns, min_cluster_size=min_cluster_size, cluster_selection_epsilon=cluster_selection_epsilon))
     
     return df_temp
 
