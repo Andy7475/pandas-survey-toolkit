@@ -169,6 +169,7 @@ def extract_keywords(df: pd.DataFrame,
                      threshold: float = 0.4,
                      ngram_range: Tuple[int, int] = (1, 1),
                      min_df: int = 5,
+                     min_count: int = None,
                      min_proportion_with_keywords: float = 0.95,
                      **kwargs) -> pd.DataFrame:
     """
@@ -223,7 +224,8 @@ def extract_keywords(df: pd.DataFrame,
     df_temp = df_temp.refine_keywords(keyword_column = output_column,
                             text_column = lemma_column,
                             min_proportion = min_proportion_with_keywords,
-                            output_column = "refined_keywords")
+                            output_column = "refined_keywords",
+                            min_count = min_count)
 
     return df_temp
 
