@@ -37,6 +37,7 @@ def cluster_questions(df, columns=None, pattern=None, likert_mapping=None,
     umap_n_components (int): The number of dimensions for UMAP output. Default is 2.
     hdbscan_min_cluster_size (int): The minimum size of clusters for HDBSCAN. Default is 5.
     hdbscan_min_samples (int): The number of samples in a neighborhood for a core point in HDBSCAN. Default is None.
+    cluster_selection_epsilon (float): A distance threshold. Clusters below this value will be merged. Default is 0.0. higher epslion = fewer, larger clusters
     
     Returns:
     pandas.DataFrame: The input DataFrame with additional columns for encoded Likert responses, UMAP coordinates, and cluster IDs.
