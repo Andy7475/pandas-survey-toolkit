@@ -11,7 +11,7 @@ df.extract_sentiment(input_column="survey-comments")
 It will abstract away a lot of the data transformation pipeline to give you useful functionality with minimal code.
 
 # Examples
-See Read-the-docs for simple example notebooks. There are more detailed notebooks in the repo under notebooks/
+See [Online Documentation (not hosted on readthedocs)](https://storage.googleapis.com/pandas-survey-toolkit/html/index.html) for simple example notebooks. There are more detailed notebooks in the repo under notebooks/
 
 # Functionality
 
