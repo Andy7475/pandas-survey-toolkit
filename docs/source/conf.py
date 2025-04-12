@@ -10,10 +10,7 @@ import os
 import sys
 import pypandoc
 
-pandoc_path = r"C:\Program Files\Pandoc\pandoc.exe"
-# This path needs to point to where your modules can be imported from
 sys.path.insert(0, os.path.abspath("../../src"))
-# You might also need this line to make the package importable
 sys.path.insert(0, os.path.abspath("../../"))
 
 project = "pandas-survey-toolkit"
