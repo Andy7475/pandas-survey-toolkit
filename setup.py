@@ -34,4 +34,6 @@ setup(
         "gensim>=4.3.3",
         "altair>=5.4.0",
     ],
+    license="MIT",
+    license_files=["LICENSE"],
 )
