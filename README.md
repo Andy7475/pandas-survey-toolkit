@@ -10,6 +10,9 @@ df.extract_sentiment(input_column="survey-comments")
 
 It will abstract away a lot of the data transformation pipeline to give you useful functionality with minimal code.
 
+# Examples
+See Read-the-docs for simple example notebooks. There are more detailed notebooks in the repo under notebooks/
+
 # Functionality
 
 ## Clustering comments
@@ -25,7 +28,7 @@ Involves TFIDF and word co-occurence to gain some high level insights into the l
 For strongly disagree ... neutral ... strong agree type responses, it will groups all those questions together to identity groups of respondents within your survey data. This can be much more useful than overall averages across the survey.
 
 ## Visualisation
-Functions to help make sense of the clusters and topics you have identified using the above functions
+Functions to help make sense of the clusters and topics you have identified using the above functions (in development)
 
 ## Setup
 If sentence transformers throws dll errors: https://stackoverflow.com/questions/78484297/c-torch-lib-fbgemm-dll-or-one-of-its-dependencies/78794748#78794748
