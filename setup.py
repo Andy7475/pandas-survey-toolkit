@@ -26,11 +26,11 @@ setup(
     install_requires=[
         "sentence-transformers>=3.0",
         "umap-learn>=0.5",
-        "scikit-learn>=1.5",
+        "scikit-learn>=1.3",
         "pandas>=2.2.0",
         "numpy==1.24.3",
         "pandas-flavor>=0.6.0",
-        "spacy>=3.7",
+        "spacy>=3.8",
         "gensim>=4.3.3",
         "altair>=5.4.0",
     ],
