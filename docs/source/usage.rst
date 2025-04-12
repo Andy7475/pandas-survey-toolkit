@@ -2,7 +2,7 @@ Usage
 =====
 
 Basic Examples
--------------
+--------------
 
 Here's how to use the main features of the toolkit:
 
