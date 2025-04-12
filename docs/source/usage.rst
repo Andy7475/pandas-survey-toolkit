@@ -25,3 +25,7 @@ Here's how to use the main features of the toolkit:
 
     # Cluster comments
     df = df.cluster_comments(input_column='comments')
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:

@@ -13,13 +13,13 @@ A toolkit for analyzing survey data using pandas extensions.
    :caption: Contents:
 
    installation
+   examples
    usage
    api/index
-   
+      
 Indices and tables
 ==================
 
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
-
