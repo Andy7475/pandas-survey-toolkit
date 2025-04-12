@@ -1,5 +1,5 @@
 pandas-flavor
-pandas>=2.2.2
+pandas>=2.0.3
 transformers==4.34.0
 sentence-transformers==3.0.1
 numpy==1.24.3
