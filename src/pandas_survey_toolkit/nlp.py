@@ -37,25 +37,41 @@ def cluster_questions(
     hdbscan_min_samples=None,
     cluster_selection_epsilon=0.4,
 ):
+    """Cluster Likert scale questions based on response patterns.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    columns : list, optional
+        List of column names to cluster. If None, all columns matching the pattern will be used.
+    pattern : str, optional
+        Regex pattern to match column names. Used if columns is None.
+    likert_mapping : dict, optional
+        Custom mapping for Likert scale responses. If None, default mapping is used.
+    umap_n_neighbors : int, optional
+        The size of local neighborhood for UMAP. Default is 15.
+    umap_min_dist : float, optional
+        The minimum distance between points in UMAP. Default is 0.1.
+    hdbscan_min_cluster_size : int, optional
+        The minimum size of clusters for HDBSCAN. Default is 20.
+    hdbscan_min_samples : int, optional
+        The number of samples in a neighborhood for a core point in HDBSCAN. Default is None.
+    cluster_selection_epsilon : float, optional
+        A distance threshold. Clusters below this value will be merged. Default is 0.4.
+        Higher epsilon means fewer, larger clusters.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with additional columns for encoded Likert responses,
+        UMAP coordinates, and cluster IDs.
+
+    Raises
+    ------
+    ValueError
+        If neither 'columns' nor 'pattern' is provided.
     """
-    Cluster Likert scale questions based on response patterns.
-
-    Parameters:
-    df (pandas.DataFrame): The input DataFrame.
-    columns (list): List of column names to cluster. If None, all columns matching the pattern will be used.
-    pattern (str): Regex pattern to match column names. Used if columns is None.
-    likert_mapping (dict): Custom mapping for Likert scale responses. If None, default mapping is used.
-    umap_n_neighbors (int): The size of local neighborhood for UMAP. Default is 15.
-    umap_min_dist (float): The minimum distance between points in UMAP. Default is 0.1.
-    umap_n_components (int): The number of dimensions for UMAP output. Default is 2.
-    hdbscan_min_cluster_size (int): The minimum size of clusters for HDBSCAN. Default is 5.
-    hdbscan_min_samples (int): The number of samples in a neighborhood for a core point in HDBSCAN. Default is None.
-    cluster_selection_epsilon (float): A distance threshold. Clusters below this value will be merged. Default is 0.0. higher epslion = fewer, larger clusters
-
-    Returns:
-    pandas.DataFrame: The input DataFrame with additional columns for encoded Likert responses, UMAP coordinates, and cluster IDs.
-    """
-
     # Select columns
     if columns is None and pattern is None:
         raise ValueError("Either 'columns' or 'pattern' must be provided.")
@@ -91,19 +107,35 @@ def cluster_questions(
 def encode_likert(
     df, likert_columns, output_prefix="likert_encoded_", custom_mapping=None, debug=True
 ):
-    """
-    Encode Likert scale responses to numeric values.
+    """Encode Likert scale responses to numeric values.
 
-    Parameters:
-    df (pandas.DataFrame): The input DataFrame.
-    likert_columns (list): List of column names containing Likert scale responses.
-    output_prefix (str): Prefix for the new encoded columns. Default is 'likert_encoded_'.
-    custom_mapping (dict): Optional custom mapping for Likert scale responses.
-    debug (bool): Prints out the mappings
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    likert_columns : list
+        List of column names containing Likert scale responses.
+    output_prefix : str, optional
+        Prefix for the new encoded columns. Default is 'likert_encoded_'.
+    custom_mapping : dict, optional
+        Optional custom mapping for Likert scale responses.
+    debug : bool, optional
+        If True, prints out the mappings. Default is True.
 
-    Returns:
-    pandas.DataFrame: The input DataFrame with additional columns for encoded Likert responses.
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with additional columns for encoded Likert responses.
+
+    Notes
+    -----
+    Default mapping:
+    - -1: Phrases containing 'disagree', 'do not agree', etc.
+    - 0: Phrases containing 'neutral', 'neither', 'unsure', etc.
+    - +1: Phrases containing 'agree' (but not 'disagree' or 'not agree')
+    - NaN: NaN values are preserved
     """
+
 
     def default_mapping(response):
         if pd.isna(response):
@@ -188,7 +220,6 @@ def encode_likert(
 
     return df
 
-
 @pf.register_dataframe_method
 def extract_keywords(
     df: pd.DataFrame,
@@ -205,28 +236,46 @@ def extract_keywords(
     min_proportion_with_keywords: float = 0.95,
     **kwargs,
 ) -> pd.DataFrame:
-    """
-    Apply a pipeline of text preprocessing, spaCy processing, lemmatization, and TF-IDF
+    """Apply a pipeline of text preprocessing, spaCy processing, lemmatization, and TF-IDF
     to extract keywords from the specified column.
 
-    Parameters:
-    df (pandas.DataFrame): The input DataFrame.
-    input_column (str): Name of the column containing text to process.
-    output_column (str): Name of the column to store the extracted keywords. Default is 'keywords'.
-    preprocessed_column (str): Name of the column to store preprocessed text. Default is 'preprocessed_text'.
-    spacy_column (str): Name of the column to store spaCy output. Default is 'spacy_output'.
-    lemma_column (str): Name of the column to store lemmatized text. Default is 'lemmatized_text'.
-    top_n (int): Number of top keywords to extract for each document. Default is 3.
-    threshold (float): Minimum TF-IDF score for a keyword to be included. Default is 0.0.
-    ngram_range (tuple): The lower and upper boundary of the range of n-values for different n-grams to be extracted.
-                         Default is (1, 1) which means only unigrams.
-    **kwargs: Additional keyword arguments to pass to the preprocessing, spaCy, lemmatization, or TF-IDF functions.
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    input_column : str
+        Name of the column containing text to process.
+    output_column : str, optional
+        Name of the column to store the extracted keywords. Default is 'keywords'.
+    preprocessed_column : str, optional
+        Name of the column to store preprocessed text. Default is 'preprocessed_text'.
+    spacy_column : str, optional
+        Name of the column to store spaCy output. Default is 'spacy_output'.
+    lemma_column : str, optional
+        Name of the column to store lemmatized text. Default is 'lemmatized_text'.
+    top_n : int, optional
+        Number of top keywords to extract for each document. Default is 3.
+    threshold : float, optional
+        Minimum TF-IDF score for a keyword to be included. Default is 0.4.
+    ngram_range : tuple, optional
+        The lower and upper boundary of the range of n-values for different n-grams to be extracted.
+        Default is (1, 1) which means only unigrams.
+    min_df : int, optional
+        Minimum document frequency for TF-IDF. Default is 5.
+    min_count : int, optional
+        Minimum count for a keyword to be considered common in refinement. Default is None.
+    min_proportion_with_keywords : float, optional
+        Minimum proportion of rows that should have keywords after refinement. Default is 0.95.
+    **kwargs
+        Additional keyword arguments to pass to the preprocessing, spaCy, 
+        lemmatization, or TF-IDF functions.
 
-    Returns:
-    pandas.DataFrame: The input DataFrame with additional columns for preprocessed text,
-                      spaCy output, lemmatized text, and extracted keywords.
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with additional columns for preprocessed text,
+        spaCy output, lemmatized text, and extracted keywords.
     """
-
     df_temp = df.copy()
     # Step 1: Preprocess text
     df_temp = df_temp.preprocess_text(
@@ -283,20 +332,32 @@ def refine_keywords(
     output_column: str = None,
     debug: bool = True,
 ) -> pd.DataFrame:
-    """
-    Refine keywords by replacing rare keywords with more common ones based on the text content.
+    """Refine keywords by replacing rare keywords with more common ones based on the text content.
 
-    Parameters:
-    df (pd.DataFrame): The input DataFrame.
-    keyword_column (str): Name of the column containing keyword lists.
-    text_column (str): Name of the column containing the original text.
-    min_count (int, optional): Minimum count for a keyword to be considered common. If None, it will be determined automatically.
-    min_proportion (float): Minimum proportion of rows that should have keywords after refinement. Used only if min_count is None. Default is 0.95.
-    output_column (str): Column name for the refined keyword output. If it is None, then the keyword_column is over-written.
-    debug (bool): If True, print detailed statistics about the refinement process. Default is True.
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The input DataFrame.
+    keyword_column : str, optional
+        Name of the column containing keyword lists. Default is 'keywords'.
+    text_column : str, optional
+        Name of the column containing the original text. Default is 'lemmatized_text'.
+    min_count : int, optional
+        Minimum count for a keyword to be considered common. If None,
+        it will be determined automatically. Default is None.
+    min_proportion : float, optional
+        Minimum proportion of rows that should have keywords after refinement.
+        Used only if min_count is None. Default is 0.95.
+    output_column : str, optional
+        Column name for the refined keyword output. If None, the keyword_column
+        is overwritten. Default is None.
+    debug : bool, optional
+        If True, print detailed statistics about the refinement process. Default is True.
 
-    Returns:
-    pd.DataFrame: The input DataFrame with refined keywords.
+    Returns
+    -------
+    pd.DataFrame
+        The input DataFrame with refined keywords.
     """
     if output_column is None:
         output_column = keyword_column
@@ -406,18 +467,23 @@ def refine_keywords(
 def remove_short_comments(
     df: pd.DataFrame, input_column: str, min_comment_length: int = 5
 ) -> pd.DataFrame:
-    """
-    Replace comments shorter than the specified minimum length with NaN.
+    """Replace comments shorter than the specified minimum length with NaN.
 
-    Parameters:
-    df (pandas.DataFrame): The input DataFrame.
-    input_column (str): Name of the column containing text to process.
-    min_comment_length (int): Minimum length of comment to keep. Default is 5.
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    input_column : str
+        Name of the column containing text to process.
+    min_comment_length : int, optional
+        Minimum length of comment to keep. Default is 5.
 
-    Returns:
-    pandas.DataFrame: The input DataFrame with short comments replaced by NaN.
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with short comments replaced by NaN.
     """
-    # Create a copy of the DataFrame to avoid modifying the original
+        # Create a copy of the DataFrame to avoid modifying the original
     df_copy = df.copy()
 
     # Replace short comments with NaN
@@ -435,8 +501,27 @@ def fit_sentence_transformer(
     model_name="all-MiniLM-L6-v2",
     output_column="sentence_embedding",
 ):
-    """Adds a list of vector embeddings for each string in the input column. These can then be used for downstream
-    tasks like clustering"""
+    """Add vector embeddings for each string in the input column.
+
+    Creates sentence embeddings that can be used for downstream tasks like clustering.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    input_column : str
+        Name of the column containing text to embed.
+    model_name : str, optional
+        Name of the sentence transformer model to use. Default is 'all-MiniLM-L6-v2'.
+    output_column : str, optional
+        Name of the column to store embeddings. Default is 'sentence_embedding'.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with an additional column containing sentence embeddings.
+    """
+
     # Initialize the sentence transformer model
     masked_df, mask = create_masked_df(df, [input_column])
     model = SentenceTransformer(model_name)
@@ -454,23 +539,31 @@ def fit_sentence_transformer(
     return df_to_return
 
 
+
 @pf.register_dataframe_method
 def extract_sentiment(
     df,
     input_column: str,
     output_columns=["positive", "neutral", "negative", "sentiment"],
 ):
-    """
-    Extract sentiment from text using the cardiffnlp/twitter-roberta-base-sentiment model.
+    """Extract sentiment from text using the cardiffnlp/twitter-roberta-base-sentiment model.
 
-    Parameters:
-    df (pandas.DataFrame): The input DataFrame.
-    input_column (str): Name of the column containing text to analyze.
-    output_columns (list): List of column names for the output. Default is ["positive", "neutral", "negative", "sentiment"].
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    input_column : str
+        Name of the column containing text to analyze.
+    output_columns : list, optional
+        List of column names for the output.
+        Default is ["positive", "neutral", "negative", "sentiment"].
 
-    Returns:
-    pandas.DataFrame: The input DataFrame with additional columns for sentiment scores and labels.
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with additional columns for sentiment scores and labels.
     """
+
     MODEL = "cardiffnlp/twitter-roberta-base-sentiment"
     tokenizer = AutoTokenizer.from_pretrained(MODEL)
     model = AutoModelForSequenceClassification.from_pretrained(MODEL)
@@ -516,10 +609,38 @@ def cluster_comments(
     cluster_selection_epsilon: float = 0.2,
     n_neighbors: int = 15,
 ):
-    """applies a pipeline of 1) vector embeddings 2) dimensional reduction 3) clustering
-    to assign each row a cluster ID so that similar free text comments (found in the input_column) can be grouped together.
-    Returns a modified dataframe. If you want control over parameters for the various functions,
-    then apply them separately. The defaults should be OK in most cases."""
+    """Apply a pipeline for clustering text comments.
+
+    Applies a pipeline of:
+    1) Vector embeddings 
+    2) Dimensional reduction 
+    3) Clustering
+    
+    This assigns each row a cluster ID so that similar free text comments 
+    (found in the input_column) can be grouped together.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    input_column : str
+        Name of the column containing text to cluster.
+    output_columns : list, optional
+        Names for the output columns. Default is ["cluster", "cluster_probability"].
+    min_cluster_size : int, optional
+        The minimum size of clusters for HDBSCAN. Default is 5.
+    cluster_selection_epsilon : float, optional
+        Distance threshold for HDBSCAN. Higher epsilon means fewer, larger clusters.
+        Default is 0.2.
+    n_neighbors : int, optional
+        The size of local neighborhood for UMAP. Default is 15.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with additional columns for cluster IDs and probabilities.
+    """
+
 
     df_temp = (
         df.fit_sentence_transformer(
@@ -539,7 +660,6 @@ def cluster_comments(
 
     return df_temp
 
-
 @pf.register_dataframe_method
 def fit_tfidf(
     df: pd.DataFrame,
@@ -551,23 +671,33 @@ def fit_tfidf(
     ngram_range: Tuple[int, int] = (1, 1),
     **tfidf_kwargs,
 ) -> pd.DataFrame:
-    """
-    Apply TF-IDF vectorization to a text column and extract top N keywords for each document,
-    while preserving NaN values in the original DataFrame. Supports n-gram extraction.
+    """Apply TF-IDF vectorization to extract top keywords from text.
 
-    Parameters:
-    df (pandas.DataFrame): The input DataFrame.
-    input_column (str): Name of the column containing text to vectorize.
-    output_column (str): Name of the column to store the extracted keywords. Default is 'keywords'.
-    top_n (int): Number of top keywords to extract for each document. Default is 5.
-    threshold (float): Minimum TF-IDF score for a keyword to be included. Default is 0.0.
-    append_features (bool): If True, append all TF-IDF features to the DataFrame. Default is False.
-    ngram_range (tuple): The lower and upper boundary of the range of n-values for different n-grams to be extracted.
-                         Default is (1, 1) which means only unigrams. Set to (1, 2) for unigrams and bigrams, and so on.
-    **tfidf_kwargs: Additional keyword arguments to pass to TfidfVectorizer.
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    input_column : str
+        Name of the column containing text to vectorize.
+    output_column : str, optional
+        Name of the column to store the extracted keywords. Default is 'keywords'.
+    top_n : int, optional
+        Number of top keywords to extract for each document. Default is 3.
+    threshold : float, optional
+        Minimum TF-IDF score for a keyword to be included. Default is 0.6.
+    append_features : bool, optional
+        If True, append all TF-IDF features to the DataFrame (useful for downstream machine learning tasks). Default is False.
+    ngram_range : tuple, optional
+        The lower and upper boundary of the range of n-values for different
+        n-grams to be extracted. Default is (1, 1) which means only unigrams.
+        Set to (1, 2) for unigrams and bigrams, and so on.
+    **tfidf_kwargs
+        Additional keyword arguments to pass to TfidfVectorizer.
 
-    Returns:
-    pandas.DataFrame: The input DataFrame with an additional column containing the top keywords.
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with an additional column containing the top keywords.
     """
     # Create a masked DataFrame
     masked_df, mask = create_masked_df(df, [input_column])
@@ -619,17 +749,28 @@ def fit_tfidf(
 
 @pf.register_dataframe_method
 def fit_spacy(df, input_column: str, output_column: str = "spacy_output"):
-    """
-    Apply the en_core_web_md spaCy model to the specified column of the DataFrame.
+    """Apply the en_core_web_md spaCy model to the specified column.
 
-    Parameters:
-    df (pandas.DataFrame): The input DataFrame.
-    input_column (str): Name of the column containing text to analyze.
-    output_column (str): Name of the output column. Default is "spacy_output".
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    input_column : str
+        Name of the column containing text to analyze.
+    output_column : str, optional
+        Name of the output column. Default is "spacy_output".
 
-    Returns:
-    pandas.DataFrame: The input DataFrame with an additional column containing spaCy doc objects.
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with an additional column containing spaCy doc objects.
+
+    Notes
+    -----
+    If the spaCy model is not already downloaded, this function will attempt
+    to download it automatically.
     """
+
     # Check if the model is downloaded, if not, download it
     try:
         nlp = spacy.load("en_core_web_md")
@@ -664,25 +805,39 @@ def get_lemma(
     keep_dep: Union[List[str], None] = ["neg"],
     join_tokens: bool = True,
 ) -> pd.DataFrame:
-    """
-    Extract lemmatized text from the spaCy doc objects in the specified column.
+    """Extract lemmatized text from spaCy doc objects.
 
-    Parameters:
-    df (pandas.DataFrame): The input DataFrame.
-    input_column (str): Name of the column containing spaCy doc objects. Default is 'spacy_output'.
-    output_column (str): Name of the output column for lemmatized text. Default is 'lemmatized_text'.
-    text_pos (List[str]): List of POS tags to exclude from lemmatization and return the text. Default is ['PRON'].
-    remove_punct (bool): Whether to remove punctuation. Default is True.
-    remove_space (bool): Whether to remove whitespace tokens. Default is True.
-    remove_stop (bool): Whether to remove stop words. Default is True.
-    keep_tokens (List[str]): List of token texts to always keep. Default is None.
-    keep_pos (List[str]): List of POS tags to always keep. Default is None.
-    keep_dep (List[str]): List of dependency labels to always keep. Default is None.
-    join_tokens (bool): Whether to join tokens into a string. If False, returns a list of tokens. Default is True.
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    input_column : str, optional
+        Name of the column containing spaCy doc objects. Default is 'spacy_output'.
+    output_column : str, optional
+        Name of the output column for lemmatized text. Default is 'lemmatized_text'.
+    text_pos : List[str], optional
+        List of POS tags to exclude from lemmatization and return the text. Default is ['PRON'].
+    remove_punct : bool, optional
+        Whether to remove punctuation. Default is True.
+    remove_space : bool, optional
+        Whether to remove whitespace tokens. Default is True.
+    remove_stop : bool, optional
+        Whether to remove stop words. Default is True.
+    keep_tokens : List[str], optional
+        List of token texts to always keep. Default is None.
+    keep_pos : List[str], optional
+        List of POS tags to always keep. Default is None.
+    keep_dep : List[str], optional
+        List of dependency labels to always keep. Default is ["neg"].
+    join_tokens : bool, optional
+        Whether to join tokens into a string. If False, returns a list of tokens. Default is True.
 
-    Returns:
-    pandas.DataFrame: The input DataFrame with an additional column containing lemmatized text or token list.
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with an additional column containing lemmatized text or token list.
     """
+
     # Create masked DataFrame
     masked_df, mask = create_masked_df(df, [input_column])
 
@@ -736,28 +891,46 @@ def preprocess_text(
     keep_sentence_punctuation: bool = True,
     comment_length_column: str = None,
 ) -> pd.DataFrame:
-    """
-    Preprocess text data in the specified column, tailored for survey responses.
+    """Preprocess text data in the specified column, tailored for survey responses.
 
-    Parameters:
-    df (pandas.DataFrame): The input DataFrame.
-    input_column (str): Name of the column containing text to preprocess.
-    output_column (str): Name of the output column. If None, overwrites the input column.
-    remove_html (bool): Whether to remove unexpected HTML tags. Default is True.
-    lower_case (bool): Whether to lowercase all words. Default is False
-    normalize_whitespace (bool): Whether to normalize whitespace. Default is True.
-    remove_numbers (bool): Whether to remove numbers. Default is False.
-    remove_stopwords (bool): Whether to remove stop words. Default is False.
-    flag_short_comments (bool): Whether to flag very short comments. Default is False.
-    min_comment_length (int): Minimum length of comment to not be flagged as short. Default is 5.
-    max_comment_length (int): Maximum length of comment to keep. If None, keeps full length. Default is None.
-    remove_extra_punctuation (bool): Whether to remove extra punctuation. Default is True.
-    keep_sentence_punctuation (bool): Whether to keep sentence-level punctuation. Default is True.
-    comment_length_column (str): Name of the column to store comment lengths. If None, no column is added. Default is None.
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    input_column : str
+        Name of the column containing text to preprocess.
+    output_column : str, optional
+        Name of the output column. If None, overwrites the input column.
+    remove_html : bool, optional
+        Whether to remove unexpected HTML tags. Default is True.
+    lower_case : bool, optional
+        Whether to lowercase all words. Default is False.
+    normalize_whitespace : bool, optional
+        Whether to normalize whitespace. Default is True.
+    remove_numbers : bool, optional
+        Whether to remove numbers. Default is False.
+    remove_stopwords : bool, optional
+        Whether to remove stop words. Default is False.
+    flag_short_comments : bool, optional
+        Whether to flag very short comments. Default is False.
+    min_comment_length : int, optional
+        Minimum length of comment to not be flagged as short. Default is 5.
+    max_comment_length : int, optional
+        Maximum length of comment to keep. If None, keeps full length. Default is None.
+    remove_punctuation : bool, optional
+        Whether to remove punctuation. Default is True.
+    keep_sentence_punctuation : bool, optional
+        Whether to keep sentence-level punctuation. Default is True.
+    comment_length_column : str, optional
+        Name of the column to store comment lengths. If None, no column is added. Default is None.
 
-    Returns:
-    pandas.DataFrame: The input DataFrame with preprocessed text and optionally new columns for short comments, truncation info, and comment length.
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with preprocessed text and optionally new columns for
+        short comments, truncation info, and comment length.
     """
+
     output_column = output_column or input_column
 
     # Create masked DataFrame
