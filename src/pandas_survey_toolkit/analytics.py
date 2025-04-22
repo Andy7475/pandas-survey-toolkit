@@ -16,13 +16,38 @@ from pandas_survey_toolkit.utils import combine_results, create_masked_df
 def fit_umap(
     df, input_columns: Union[List[str], str], output_columns=["umap_x", "umap_y"], target_y:str=None, embeddings_in_list=False, **kwargs
 ):
-    """applies UMAP to the columns in the dataframe and appends the x and y co-ordinates
-    to the dataframe as 2 new columns
-    most import kwargs to use would be n_neighbors (default is 15) - note american spelling.
-    If your embeddings are a list of values in a single column, set embeddings_in_list to True,
-    otherwise it assumes each column is a separate set of values / dimension to be reduced.
-
-    Returns: modified dataframe
+    """Apply UMAP to the columns in the dataframe.
+    
+    This function applies UMAP dimensionality reduction to the specified columns
+    and appends the x and y coordinates to the dataframe as new columns.
+    
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input dataframe to transform.
+    input_columns : Union[List[str], str]
+        Column name(s) containing the data to reduce.
+    output_columns : list, optional
+        Names for the output coordinate columns, by default ["umap_x", "umap_y"]
+    target_y : str, optional
+        Name of a column to use as the target variable for supervised UMAP, by default None
+    embeddings_in_list : bool, optional
+        Set to True if embeddings are a list of values in a single column,
+        False if each column is a separate dimension, by default False
+    **kwargs
+        Additional arguments to pass to UMAP. Most important is n_neighbors (default is 15).
+    
+    Returns
+    -------
+    pandas.DataFrame
+        The input dataframe with added UMAP coordinate columns.
+    
+    Raises
+    ------
+    KeyError
+        If the specified target_y is not a column in the dataframe.
+    ValueError
+        If embeddings_in_list is True but multiple input columns are provided.
     """
 
     if isinstance(input_columns, str):
@@ -69,21 +94,34 @@ def fit_umap(
 def fit_cluster_hdbscan(df, input_columns=['umap_x', 'umap_y'], output_columns=["cluster", "cluster_probability"], min_cluster_size=5, min_samples=None, 
                         cluster_selection_epsilon=0.0, metric='euclidean', cluster_selection_method='eom',
                         allow_single_cluster=False):
-    """
-    Apply HDBSCAN clustering to the specified columns of the DataFrame.
+    """Apply HDBSCAN clustering to the specified columns of the DataFrame.
     
-    Parameters:
-    df (pandas.DataFrame): The input DataFrame.
-    columns (list): List of column names to use for clustering. Default is ['umap_1', 'umap_2'].
-    min_cluster_size (int): The minimum size of clusters. Default is 5.
-    min_samples (int): The number of samples in a neighborhood for a point to be considered a core point. Default is None.
-    cluster_selection_epsilon (float): A distance threshold. Clusters below this value will be merged. Default is 0.0. higher epslion = fewer, larger clusters
-    metric (str): The metric to use for distance computation. Default is 'euclidean'.
-    cluster_selection_method (str): The method to select clusters. Either 'eom' or 'leaf'. Default is 'eom'.
-    allow_single_cluster (bool): Whether to allow a single cluster. Default is False.
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    input_columns : list, optional
+        List of column names to use for clustering, by default ['umap_x', 'umap_y']
+    output_columns : list, optional
+        Names for the output columns, by default ["cluster", "cluster_probability"]
+    min_cluster_size : int, optional
+        The minimum size of clusters, by default 5
+    min_samples : int, optional
+        The number of samples in a neighborhood for a point to be considered a core point, by default None
+    cluster_selection_epsilon : float, optional
+        A distance threshold. Clusters below this value will be merged.
+        Higher epsilon means fewer, larger clusters, by default 0.0
+    metric : str, optional
+        The metric to use for distance computation, by default 'euclidean'
+    cluster_selection_method : str, optional
+        The method to select clusters. Either 'eom' or 'leaf', by default 'eom'
+    allow_single_cluster : bool, optional
+        Whether to allow a single cluster, by default False
     
-    Returns:
-    pandas.DataFrame: The input DataFrame with an additional 'cluster' column containing cluster labels.
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with additional columns containing cluster labels and probabilities.
     """
     # Extract the specified columns for clustering
 
