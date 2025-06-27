@@ -24,15 +24,16 @@ setup(
     packages=find_packages(where="src"),
     python_requires=">=3.8",
     install_requires=[
-        "sentence-transformers>=3.0",
-        "umap-learn>=0.5",
-        "scikit-learn>=1.3",
-        "pandas>=2.0.3",
-        "numpy==1.24.3",
-        "pandas-flavor>=0.6.0",
-        "spacy>=3.0.0",
-        "gensim>=4.0.0",
-        "altair>=5.0.0",
+        "torch>=2.1.0,<3.0",  # Need 2.1+ for torch.compiler support
+        "sentence-transformers>=3.0,<4.0",
+        "umap-learn>=0.5,<1.0",
+        "scikit-learn>=1.3,<2.0",  # Updated to allow 1.7.x
+        "pandas>=2.0,<3.0",
+        # numpy removed - pandas includes it as dependency
+        "pandas-flavor>=0.6.0,<1.0",
+        "spacy>=3.0.0,<4.0",
+        "gensim>=4.0.0,<5.0",
+        "altair>=5.0.0,<6.0",
     ],
     license="MIT",
     license_files=["LICENSE"],
