@@ -34,6 +34,8 @@ setup(
         "spacy>=3.0.0,<4.0",
         "gensim>=4.0.0,<5.0",
         "altair>=5.0.0,<6.0",
+        "matplotlib>=3.0.0,<4.0",
+        "pyvis>=0.3.2,<1.0",
     ],
     license="MIT",
     license_files=["LICENSE"],
