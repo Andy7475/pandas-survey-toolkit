@@ -22,18 +22,18 @@ setup(
     ],
     package_dir={"": "src"},
     packages=find_packages(where="src"),
-    python_requires=">=3.8",
+    python_requires=">=3.11",
     install_requires=[
         "torch>=2.1.0,<3.0",  # Need 2.1+ for torch.compiler support
         "sentence-transformers>=3.0,<4.0",
         "umap-learn>=0.5,<1.0",
         "scikit-learn>=1.3,<2.0",  # Updated to allow 1.7.x
-        "pandas>=2.0,<3.0",
-        # numpy removed - pandas includes it as dependency
+        "pandas>=2.2.0,<3.0",
+        "numpy>=1.26.0,<2.0",
         "pandas-flavor>=0.6.0,<1.0",
         "spacy>=3.0.0,<4.0",
         "gensim>=4.0.0,<5.0",
-        "altair>=5.0.0,<6.0",
+        "altair>=4.0.0,<5.0",
         "matplotlib>=3.0.0,<4.0",
         "pyvis>=0.3.2,<1.0",
     ],
