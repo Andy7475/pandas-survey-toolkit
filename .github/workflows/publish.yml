@@ -46,4 +46,35 @@ jobs:
     - name: Publish distribution 📦 to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        password: ${{ secrets.PYPI_API_TOKEN }} 
+        password: ${{ secrets.PYPI_API_TOKEN }}
+
+  create-github-release:
+    name: Create GitHub Release
+    needs:
+    - publish-to-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to create releases
+    steps:
+    - uses: actions/checkout@v4
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
+        body: |
+          ## Changes in ${{ github.ref_name }}
+          
+          This release was automatically created from tag ${{ github.ref_name }}.
+          
+          ### What's New
+          - Package published to PyPI: https://pypi.org/project/pandas-survey-toolkit/${{ github.ref_name }}/
+          
+          ### Installation
+          ```bash
+          pip install --upgrade pandas-survey-toolkit
+          ```
+          
+          For detailed changes, see the commit history between releases.
+        draft: false
+        prerelease: false 
