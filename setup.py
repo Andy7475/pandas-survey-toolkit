@@ -29,13 +29,15 @@ setup(
         "umap-learn>=0.5,<1.0",
         "scikit-learn>=1.3,<2.0",  # Updated to allow 1.7.x
         "pandas>=2.2.0,<3.0",
-        "numpy==1.24.3",
+        "numpy>=1.26.0,<2.0",
         "pandas-flavor>=0.6.0,<1.0",
         "spacy>=3.0.0,<4.0",
-        "gensim>=4.0.0,<5.0",
+        "gensim>=4.3.3,<5.0",  # Fixed version for scipy 1.13+ compatibility
+        "scipy>=1.10.0,<1.15.0",  # Compatible with gensim
         "altair>=4.0.0,<5.0",
         "matplotlib>=3.0.0,<4.0",
         "pyvis>=0.3.2,<1.0",
+        "transformers>=4.20.0,<5.0",  # Add explicit transformers constraint
     ],
     license="MIT",
     license_files=["LICENSE"],
