@@ -30,6 +30,15 @@ jobs:
         with:
           fetch-depth: 0  # setuptools_scm needs full history
 
+      # Remove large pre-installed tools to make room for torch + models.
+      # Android SDK alone is ~8 GB; total savings ~15 GB.
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet \
+            /opt/ghc /usr/local/share/boost \
+            /opt/hostedtoolcache/CodeQL
+          df -h
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -59,7 +68,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-spacy-
 
-      - name: Install package and dependencies
+      # Install CPU-only torch first. uv then finds the constraint
+      # torch>=2.1.0,<3.0 already satisfied when resolving -e . and
+      # does not pull in the much larger CUDA build from PyPI.
+      - name: Install CPU-only PyTorch
+        run: |
+          uv pip install --system torch \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple
+
+      - name: Install package and remaining dependencies
         run: uv pip install --system -e .
 
       - name: Install test dependencies
@@ -75,7 +93,7 @@ jobs:
 
   # -----------------------------------------------------------------------
   # Backward-compatibility check: ensure tests still pass on pandas 2.x.
-  # The main job will install pandas 3.x (latest); this job pins to 2.x.
+  # The main job installs pandas 3.x (latest); this job pins to 2.x.
   # -----------------------------------------------------------------------
   test-pandas2:
     name: Python 3.11 / pandas 2.x (compat)
@@ -90,6 +108,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet \
+            /opt/ghc /usr/local/share/boost \
+            /opt/hostedtoolcache/CodeQL
+          df -h
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -117,6 +142,12 @@ jobs:
           key: ${{ runner.os }}-pip-spacy-pandas2-v1
           restore-keys: |
             ${{ runner.os }}-pip-spacy-
+
+      - name: Install CPU-only PyTorch
+        run: |
+          uv pip install --system torch \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple
 
       # Install with an explicit pandas 2.x upper-bound to verify the
       # package still works on the old major version.
