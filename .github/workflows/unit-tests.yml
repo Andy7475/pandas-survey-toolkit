@@ -1,0 +1,133 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # -----------------------------------------------------------------------
+  # Main test matrix: Python 3.10-3.12 with latest pandas (now >=3.0
+  # since setup.py allows pandas<4.0).
+  # -----------------------------------------------------------------------
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    env:
+      SETUPTOOLS_SCM_PRETEND_VERSION: "0.0.1"
+      # Route HuggingFace downloads to a cache-able path
+      HF_HOME: /tmp/hf-cache
+      TRANSFORMERS_CACHE: /tmp/hf-cache
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # setuptools_scm needs full history
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # setup-uv caches the uv download cache (~/.cache/uv), which stores
+      # downloaded wheels. Large packages like torch are only fetched once.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "setup.py"
+
+      - name: Cache HuggingFace model downloads
+        uses: actions/cache@v4
+        with:
+          path: /tmp/hf-cache
+          key: ${{ runner.os }}-hf-v1
+          restore-keys: |
+            ${{ runner.os }}-hf-
+
+      - name: Cache pip (spaCy model wheel)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-spacy-v1
+          restore-keys: |
+            ${{ runner.os }}-pip-spacy-
+
+      - name: Install package and dependencies
+        run: uv pip install --system -e .
+
+      - name: Install test dependencies
+        run: uv pip install --system pytest
+
+      # python -m spacy download uses pip to fetch the model package (~50 MB).
+      # The pip cache above avoids re-downloading on subsequent runs.
+      - name: Download spaCy en_core_web_md model
+        run: python -m spacy download en_core_web_md
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+
+  # -----------------------------------------------------------------------
+  # Backward-compatibility check: ensure tests still pass on pandas 2.x.
+  # The main job will install pandas 3.x (latest); this job pins to 2.x.
+  # -----------------------------------------------------------------------
+  test-pandas2:
+    name: Python 3.11 / pandas 2.x (compat)
+    runs-on: ubuntu-latest
+
+    env:
+      SETUPTOOLS_SCM_PRETEND_VERSION: "0.0.1"
+      HF_HOME: /tmp/hf-cache
+      TRANSFORMERS_CACHE: /tmp/hf-cache
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "setup.py"
+
+      - name: Cache HuggingFace model downloads
+        uses: actions/cache@v4
+        with:
+          path: /tmp/hf-cache
+          key: ${{ runner.os }}-hf-pandas2-v1
+          restore-keys: |
+            ${{ runner.os }}-hf-
+
+      - name: Cache pip (spaCy model wheel)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-spacy-pandas2-v1
+          restore-keys: |
+            ${{ runner.os }}-pip-spacy-
+
+      # Install with an explicit pandas 2.x upper-bound to verify the
+      # package still works on the old major version.
+      - name: Install package with pandas 2.x
+        run: uv pip install --system -e . "pandas>=2.2,<3.0"
+
+      - name: Install test dependencies
+        run: uv pip install --system pytest
+
+      - name: Download spaCy en_core_web_md model
+        run: python -m spacy download en_core_web_md
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
