@@ -22,7 +22,7 @@ setup(
     ],
     package_dir={"": "src"},
     packages=find_packages(where="src"),
-    python_requires=">=3.10,<=3.13",
+    python_requires=">=3.10,<=3.14",
     install_requires=[
         "torch>=2.1.0,<3.0",  # Need 2.1+ for torch.compiler support
         "sentence-transformers>=3.0,<4.0",
