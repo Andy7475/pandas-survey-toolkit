@@ -22,14 +22,13 @@ setup(
     ],
     package_dir={"": "src"},
     packages=find_packages(where="src"),
-    python_requires=">=3.9,<=3.12",
+    python_requires=">=3.10,<=3.13",
     install_requires=[
         "torch>=2.1.0,<3.0",  # Need 2.1+ for torch.compiler support
         "sentence-transformers>=3.0,<4.0",
         "umap-learn>=0.5,<1.0",
         "scikit-learn>=1.3,<2.0",  # Updated to allow 1.7.x
         "pandas>=2.2.0,<3.0",
-        "numpy>=1.26.0,<2.0",
         "pandas-flavor>=0.6.0,<1.0",
         "spacy>=3.0.0,<4.0",
         "gensim>=4.3.3,<5.0",  # Fixed version for scipy 1.13+ compatibility
