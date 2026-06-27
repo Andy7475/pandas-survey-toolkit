@@ -2572,7 +2572,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "altair", specifier = ">=5.4,<6.0" },
+    { name = "altair", specifier = ">=5.4,<7.0" },
     { name = "gensim", specifier = ">=4.3.3,<5.0" },
     { name = "pandas", specifier = ">=2.2.0,<3.0" },
     { name = "pandas-flavor", specifier = ">=0.6.0,<1.0" },
