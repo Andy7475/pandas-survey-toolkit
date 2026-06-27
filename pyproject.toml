@@ -1,23 +1,63 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "pandas-survey-toolkit"
+dynamic = ["version"]
+description = "A pandas extension for survey analysis"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Andy Laing", email = "andylaing5@gmail.com" }]
+requires-python = ">=3.10,<=3.14"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "sentence-transformers>=3.0,<4.0",
+    "umap-learn>=0.5,<1.0",
+    "scikit-learn>=1.3,<2.0",
+    "pandas>=2.2.0,<3.0",
+    "pandas-flavor>=0.6.0,<1.0",
+    "spacy>=3.0.0,<4.0",
+    "gensim>=4.3.3,<5.0",
+    "scipy>=1.10.0,<1.15.0",
+    "altair>=5.4,<7.0",
+    "transformers>=4.20.0,<5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Andy7475/pandas-survey-toolkit"
+"Bug Tracker" = "https://github.com/Andy7475/pandas-survey-toolkit/issues"
 
 [tool.setuptools_scm]
 
-[tool.black]
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "coverage[toml]",
+    "ipykernel",
+    "networkx",
+    "datamapplot",
+    "pyarrow",
+    "ruff>=0.9.0",
+    "pre-commit>=3.0",
+    "nbstripout>=0.7.0",
+]
+
+[tool.ruff]
 line-length = 88
-target-version = ['py36']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

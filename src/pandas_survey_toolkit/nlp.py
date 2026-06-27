@@ -8,7 +8,9 @@ import pandas as pd
 import pandas_flavor as pf
 import spacy
 from gensim.parsing.preprocessing import (
-    remove_stopwords,
+    remove_stopwords as gensim_remove_stopwords,
+)
+from gensim.parsing.preprocessing import (
     strip_multiple_whitespaces,
     strip_numeric,
     strip_tags,
@@ -17,7 +19,6 @@ from scipy.special import softmax
 from sentence_transformers import SentenceTransformer
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from pandas_survey_toolkit.analytics import fit_cluster_hdbscan, fit_umap
 from pandas_survey_toolkit.utils import (
     apply_vectorizer,
     combine_results,
@@ -44,7 +45,8 @@ def cluster_questions(
     df : pandas.DataFrame
         The input DataFrame.
     columns : list, optional
-        List of column names to cluster. If None, all columns matching the pattern will be used.
+        List of column names to cluster. If None, all columns matching
+        the pattern will be used.
     pattern : str, optional
         Regex pattern to match column names. Used if columns is None.
     likert_mapping : dict, optional
@@ -56,7 +58,8 @@ def cluster_questions(
     hdbscan_min_cluster_size : int, optional
         The minimum size of clusters for HDBSCAN. Default is 20.
     hdbscan_min_samples : int, optional
-        The number of samples in a neighborhood for a core point in HDBSCAN. Default is None.
+        The number of samples in a neighborhood for a core point in HDBSCAN.
+        Default is None.
     cluster_selection_epsilon : float, optional
         A distance threshold. Clusters below this value will be merged. Default is 0.4.
         Higher epsilon means fewer, larger clusters.
@@ -136,7 +139,6 @@ def encode_likert(
     - NaN: NaN values are preserved
     """
 
-
     def default_mapping(response):
         if pd.isna(response):
             return pd.NA
@@ -202,7 +204,8 @@ def encode_likert(
     # Alert about unconverted phrases
     if unconverted_phrases:
         warnings.warn(
-            f"The following phrases were not converted (mapped to NaN): {', '.join(unconverted_phrases)}"
+            "The following phrases were not converted (mapped to NaN): "
+            f"{', '.join(unconverted_phrases)}"
         )
 
     # Alert if default mapping didn't convert everything
@@ -215,10 +218,12 @@ def encode_likert(
         ]
         if unconverted:
             warnings.warn(
-                f"The default mapping didn't convert the following responses: {', '.join(unconverted)}"
+                "The default mapping didn't convert the following responses: "
+                f"{', '.join(unconverted)}"
             )
 
     return df
+
 
 @pf.register_dataframe_method
 def extract_keywords(
@@ -236,8 +241,8 @@ def extract_keywords(
     min_proportion_with_keywords: float = 0.95,
     **kwargs,
 ) -> pd.DataFrame:
-    """Apply a pipeline of text preprocessing, spaCy processing, lemmatization, and TF-IDF
-    to extract keywords from the specified column.
+    """Apply a pipeline of text preprocessing, spaCy processing, lemmatization,
+    and TF-IDF to extract keywords from the specified column.
 
     Parameters
     ----------
@@ -258,16 +263,18 @@ def extract_keywords(
     threshold : float, optional
         Minimum TF-IDF score for a keyword to be included. Default is 0.4.
     ngram_range : tuple, optional
-        The lower and upper boundary of the range of n-values for different n-grams to be extracted.
-        Default is (1, 1) which means only unigrams.
+        The lower and upper boundary of the range of n-values for different
+        n-grams to be extracted. Default is (1, 1) which means only unigrams.
     min_df : int, optional
         Minimum document frequency for TF-IDF. Default is 5.
     min_count : int, optional
-        Minimum count for a keyword to be considered common in refinement. Default is None.
+        Minimum count for a keyword to be considered common in refinement.
+        Default is None.
     min_proportion_with_keywords : float, optional
-        Minimum proportion of rows that should have keywords after refinement. Default is 0.95.
+        Minimum proportion of rows that should have keywords after refinement.
+        Default is 0.95.
     **kwargs
-        Additional keyword arguments to pass to the preprocessing, spaCy, 
+        Additional keyword arguments to pass to the preprocessing, spaCy,
         lemmatization, or TF-IDF functions.
 
     Returns
@@ -332,7 +339,8 @@ def refine_keywords(
     output_column: str = None,
     debug: bool = True,
 ) -> pd.DataFrame:
-    """Refine keywords by replacing rare keywords with more common ones based on the text content.
+    """Refine keywords by replacing rare keywords with more common ones based
+    on the text content.
 
     Parameters
     ----------
@@ -352,7 +360,8 @@ def refine_keywords(
         Column name for the refined keyword output. If None, the keyword_column
         is overwritten. Default is None.
     debug : bool, optional
-        If True, print detailed statistics about the refinement process. Default is True.
+        If True, print detailed statistics about the refinement process.
+        Default is True.
 
     Returns
     -------
@@ -450,17 +459,76 @@ def refine_keywords(
         print(f"Original average keywords per row: {original_keyword_count.mean():.2f}")
         print(f"Refined average keywords per row: {refined_keyword_count.mean():.2f}")
         print(
-            f"Proportion of rows with keywords after refinement: {(refined_keyword_count > 0).mean():.2%}"
+            "Proportion of rows with keywords after refinement: "
+            f"{(refined_keyword_count > 0).mean():.2%}"
         )
         print(
             f"Total unique keywords before refinement: {len(original_unique_keywords)}"
         )
         print(f"Total unique keywords after refinement: {len(refined_unique_keywords)}")
         print(
-            f"Reduction in unique keywords: {(1 - len(refined_unique_keywords) / len(original_unique_keywords)):.2%}"
+            "Reduction in unique keywords: "
+            f"{(1 - len(refined_unique_keywords) / len(original_unique_keywords)):.2%}"
         )
 
     return df_to_return
+
+
+@pf.register_dataframe_method
+def clean_survey_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Clean DataFrame column names for use with MS Forms / Excel exports.
+
+    Column names from MS Forms are full question texts and often contain
+    characters that break regex patterns (?, (), /) or are otherwise awkward
+    to work with. This function lowercases, removes punctuation, normalises
+    whitespace, and replaces spaces with underscores.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with cleaned column names.
+
+    Examples
+    --------
+    >>> df.clean_survey_columns()
+    # "How satisfied are you? (1-5)" -> "how_satisfied_are_you_1_5"
+    # "Don't Know / Pass"            -> "dont_know_pass"
+    """
+    col_df = pd.DataFrame({"col": df.columns.tolist()})
+    col_df = col_df.preprocess_text(
+        input_column="col",
+        output_column="clean_col",
+        lower_case=True,
+        remove_punctuation=True,
+        keep_sentence_punctuation=False,
+        normalize_whitespace=True,
+    )
+    new_names = (
+        col_df["clean_col"]
+        .str.replace("'", "", regex=False)
+        .str.replace(r"\s+", " ", regex=True)  # re-normalise after punctuation gaps
+        .str.strip()
+        .str.replace(" ", "_", regex=False)
+        .tolist()
+    )
+
+    # Deduplicate: append _1, _2, ... when cleaning produces identical names
+    seen: dict = {}
+    deduped = []
+    for name in new_names:
+        if name not in seen:
+            seen[name] = 0
+            deduped.append(name)
+        else:
+            seen[name] += 1
+            deduped.append(f"{name}_{seen[name]}")
+
+    return df.rename(columns=dict(zip(df.columns, deduped)))
 
 
 @pf.register_dataframe_method
@@ -483,7 +551,7 @@ def remove_short_comments(
     pandas.DataFrame
         The input DataFrame with short comments replaced by NaN.
     """
-        # Create a copy of the DataFrame to avoid modifying the original
+    # Create a copy of the DataFrame to avoid modifying the original
     df_copy = df.copy()
 
     # Replace short comments with NaN
@@ -539,14 +607,14 @@ def fit_sentence_transformer(
     return df_to_return
 
 
-
 @pf.register_dataframe_method
 def extract_sentiment(
     df,
     input_column: str,
     output_columns=["positive", "neutral", "negative", "sentiment"],
 ):
-    """Extract sentiment from text using the cardiffnlp/twitter-roberta-base-sentiment model.
+    """Extract sentiment from text using the
+    cardiffnlp/twitter-roberta-base-sentiment model.
 
     Parameters
     ----------
@@ -612,11 +680,11 @@ def cluster_comments(
     """Apply a pipeline for clustering text comments.
 
     Applies a pipeline of:
-    1) Vector embeddings 
-    2) Dimensional reduction 
+    1) Vector embeddings
+    2) Dimensional reduction
     3) Clustering
-    
-    This assigns each row a cluster ID so that similar free text comments 
+
+    This assigns each row a cluster ID so that similar free text comments
     (found in the input_column) can be grouped together.
 
     Parameters
@@ -641,7 +709,6 @@ def cluster_comments(
         The input DataFrame with additional columns for cluster IDs and probabilities.
     """
 
-
     df_temp = (
         df.fit_sentence_transformer(
             input_column=input_column, output_column="sentence_embedding"
@@ -659,6 +726,7 @@ def cluster_comments(
     )
 
     return df_temp
+
 
 @pf.register_dataframe_method
 def fit_tfidf(
@@ -686,7 +754,8 @@ def fit_tfidf(
     threshold : float, optional
         Minimum TF-IDF score for a keyword to be included. Default is 0.6.
     append_features : bool, optional
-        If True, append all TF-IDF features to the DataFrame (useful for downstream machine learning tasks). Default is False.
+        If True, append all TF-IDF features to the DataFrame (useful for
+        downstream machine learning tasks). Default is False.
     ngram_range : tuple, optional
         The lower and upper boundary of the range of n-values for different
         n-grams to be extracted. Default is (1, 1) which means only unigrams.
@@ -701,6 +770,11 @@ def fit_tfidf(
     """
     # Create a masked DataFrame
     masked_df, mask = create_masked_df(df, [input_column])
+
+    if masked_df.empty:
+        result = df.copy()
+        result[output_column] = np.nan
+        return result
 
     # Ensure ngram_range is included in the TfidfVectorizer parameters
     tfidf_kwargs["ngram_range"] = ngram_range
@@ -719,7 +793,7 @@ def fit_tfidf(
         # Get the original text for this row
         original_text = masked_df.loc[row.name, input_column].lower()
 
-        # Filter based on threshold, presence in original text, and get the corresponding feature names
+        # Filter based on threshold and presence in original text
         top_keywords = [
             feature_names[i]
             for i, idx in enumerate(tfidf_features.columns)
@@ -816,7 +890,8 @@ def get_lemma(
     output_column : str, optional
         Name of the output column for lemmatized text. Default is 'lemmatized_text'.
     text_pos : List[str], optional
-        List of POS tags to exclude from lemmatization and return the text. Default is ['PRON'].
+        List of POS tags to exclude from lemmatization and return the text.
+        Default is ['PRON'].
     remove_punct : bool, optional
         Whether to remove punctuation. Default is True.
     remove_space : bool, optional
@@ -830,12 +905,14 @@ def get_lemma(
     keep_dep : List[str], optional
         List of dependency labels to always keep. Default is ["neg"].
     join_tokens : bool, optional
-        Whether to join tokens into a string. If False, returns a list of tokens. Default is True.
+        Whether to join tokens into a string. If False, returns a list of tokens.
+        Default is True.
 
     Returns
     -------
     pandas.DataFrame
-        The input DataFrame with an additional column containing lemmatized text or token list.
+        The input DataFrame with an additional column containing lemmatized
+        text or token list.
     """
 
     # Create masked DataFrame
@@ -922,7 +999,8 @@ def preprocess_text(
     keep_sentence_punctuation : bool, optional
         Whether to keep sentence-level punctuation. Default is True.
     comment_length_column : str, optional
-        Name of the column to store comment lengths. If None, no column is added. Default is None.
+        Name of the column to store comment lengths. If None, no column is
+        added. Default is None.
 
     Returns
     -------
@@ -949,7 +1027,7 @@ def preprocess_text(
             text = strip_numeric(text)
 
         if remove_stopwords:
-            text = remove_stopwords(text)
+            text = gensim_remove_stopwords(text)
 
         if remove_punctuation:
             if keep_sentence_punctuation:
