@@ -172,7 +172,7 @@ def test_hover_text_hover_cols_only(datamap_df):
     result = _build_hover_text(datamap_df, hover_cols=["response"], colour_col=None)
     assert result is not None
     assert len(result) == len(datamap_df)
-    assert result[0] == "response text 0"
+    assert result[0] == "response: response text 0"
 
 
 def test_hover_text_multiple_hover_cols(datamap_df):
@@ -180,8 +180,7 @@ def test_hover_text_multiple_hover_cols(datamap_df):
         datamap_df, hover_cols=["response", "note"], colour_col=None
     )
     assert result is not None
-    # Each entry should join the two columns with a newline
-    assert result[0] == "response text 0\nnote 0"
+    assert result[0] == "response: response text 0\nnote: note 0"
 
 
 def test_hover_text_colour_col_only(datamap_df):
@@ -197,7 +196,7 @@ def test_hover_text_colour_col_appears_first(datamap_df):
     assert result is not None
     first_line, second_line = result[0].split("\n")
     assert first_line == "gender: M"
-    assert second_line == "response text 0"
+    assert second_line == "response: response text 0"
 
 
 def test_hover_text_colour_and_multiple_hover_cols(datamap_df):
@@ -208,8 +207,8 @@ def test_hover_text_colour_and_multiple_hover_cols(datamap_df):
     parts = result[0].split("\n")
     assert len(parts) == 3
     assert parts[0] == "gender: M"
-    assert parts[1] == "response text 0"
-    assert parts[2] == "note 0"
+    assert parts[1] == "response: response text 0"
+    assert parts[2] == "note: note 0"
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +282,23 @@ def test_datamap_plot_colour_and_title(datamap_df):
     result = datamap_plot(
         datamap_df, "label", "x", "y", colour_col="gender", title="Test Plot"
     )
+    assert isinstance(result[0], matplotlib.figure.Figure)
+
+
+def test_datamap_plot_numeric_labels():
+    """Numeric cluster IDs (e.g. from HDBSCAN) must not raise AttributeError
+    inside datamapplot's textwrap.fill call."""
+    import matplotlib.figure
+
+    n = 30
+    df = pd.DataFrame(
+        {
+            "cluster": np.tile([0, 1, 2], n // 3),
+            "x": np.random.randn(n),
+            "y": np.random.randn(n),
+        }
+    )
+    result = datamap_plot(df, "cluster", "x", "y")
     assert isinstance(result[0], matplotlib.figure.Figure)
 
 

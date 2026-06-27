@@ -211,7 +211,7 @@ def _build_hover_text(
         )
     if hover_cols:
         for col in hover_cols:
-            series_parts.append(df[col].astype(str))
+            series_parts.append(df[col].astype(str).apply(lambda v, c=col: f"{c}: {v}"))
     if not series_parts:
         return None
     return (
@@ -280,7 +280,7 @@ def datamap_plot(
     import datamapplot
 
     coords = df[[x_col, y_col]].values
-    labels = df[label_col].values
+    labels = df[label_col].astype(str).values
 
     if colour_col is not None:
         kwargs["marker_color_array"] = _build_marker_color_array(df, colour_col)
@@ -342,7 +342,7 @@ def datamap_interactive_plot(
     import datamapplot
 
     coords = df[[x_col, y_col]].values
-    labels = df[label_col].values
+    labels = df[label_col].astype(str).values
 
     hover_text = _build_hover_text(df, hover_cols, colour_col)
     if hover_text is not None:

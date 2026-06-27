@@ -138,6 +138,7 @@ def encode_likert(
     - +1: Phrases containing 'agree' (but not 'disagree' or 'not agree')
     - NaN: NaN values are preserved
     """
+    df = df.copy()
 
     def default_mapping(response):
         if pd.isna(response):
