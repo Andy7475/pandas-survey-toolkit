@@ -1,7 +1,8 @@
 import textwrap
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import altair as alt
+import numpy as np
 import pandas as pd
 
 
@@ -196,3 +197,161 @@ def cluster_heatmap_plot(df: pd.DataFrame, x: str, y: List[str], max_width: int 
     )
 
     return combined_chart
+
+
+def _build_hover_text(
+    df: pd.DataFrame,
+    hover_cols: Optional[List[str]],
+    colour_col: Optional[str],
+) -> Optional[List[str]]:
+    series_parts = []
+    if colour_col:
+        series_parts.append(
+            df[colour_col].astype(str).apply(lambda v: f"{colour_col}: {v}")
+        )
+    if hover_cols:
+        for col in hover_cols:
+            series_parts.append(df[col].astype(str))
+    if not series_parts:
+        return None
+    return (
+        pd.concat(series_parts, axis=1)
+        .apply(lambda row: "\n".join(row), axis=1)
+        .tolist()
+    )
+
+
+def _build_marker_color_array(df: pd.DataFrame, colour_col: str) -> np.ndarray:
+    import matplotlib.colors as mcolors
+    import matplotlib.pyplot as plt
+
+    unique_vals = df[colour_col].unique()
+    n = len(unique_vals)
+    cmap = plt.colormaps["tab10" if n <= 10 else "tab20"]
+    color_lookup = {
+        val: mcolors.to_hex(cmap.colors[i % len(cmap.colors)])
+        for i, val in enumerate(unique_vals)
+    }
+    return np.array([color_lookup[v] for v in df[colour_col]])
+
+
+def datamap_plot(
+    df: pd.DataFrame,
+    label_col: str,
+    x_col: str,
+    y_col: str,
+    colour_col: Optional[str] = None,
+    title: Optional[str] = None,
+    **kwargs,
+):
+    """
+    Create a static DataMapPlot visualisation from a DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing the data to visualise.
+
+    label_col : str
+        Column name containing cluster/group labels for each point.
+
+    x_col : str
+        Column name for the x-axis coordinates (e.g. UMAP dimension 1).
+
+    y_col : str
+        Column name for the y-axis coordinates (e.g. UMAP dimension 2).
+
+    colour_col : str or None (optional, default=None)
+        Column whose values determine point colours. Each unique value gets a
+        distinct colour from the tab10/tab20 palette. When ``None`` datamapplot
+        auto-generates colours from the cluster labels.
+
+    title : str or None (optional, default=None)
+        Plot title. Passed directly to datamapplot.
+
+    **kwargs
+        Additional keyword arguments forwarded to ``datamapplot.create_plot``.
+
+    Returns
+    -------
+    tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]
+        The figure and axes produced by datamapplot.
+    """
+    import datamapplot
+
+    coords = df[[x_col, y_col]].values
+    labels = df[label_col].values
+
+    if colour_col is not None:
+        kwargs["marker_color_array"] = _build_marker_color_array(df, colour_col)
+
+    if title is not None:
+        kwargs["title"] = title
+
+    return datamapplot.create_plot(coords, labels, **kwargs)
+
+
+def datamap_interactive_plot(
+    df: pd.DataFrame,
+    label_col: str,
+    x_col: str,
+    y_col: str,
+    hover_cols: Optional[List[str]] = None,
+    colour_col: Optional[str] = None,
+    title: Optional[str] = None,
+    **kwargs,
+):
+    """
+    Create an interactive DataMapPlot visualisation from a DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing the data to visualise.
+
+    label_col : str
+        Column name containing cluster/group labels for each point.
+
+    x_col : str
+        Column name for the x-axis coordinates (e.g. UMAP dimension 1).
+
+    y_col : str
+        Column name for the y-axis coordinates (e.g. UMAP dimension 2).
+
+    hover_cols : list of str or None (optional, default=None)
+        Columns whose values are shown in the hover tooltip. Multiple columns
+        are concatenated with a newline character.
+
+    colour_col : str or None (optional, default=None)
+        Column whose values determine point colours. Each unique value gets a
+        distinct colour from the tab10/tab20 palette. When ``None`` datamapplot
+        auto-generates colours from the cluster labels.
+
+    title : str or None (optional, default=None)
+        Plot title. Passed directly to datamapplot.
+
+    **kwargs
+        Additional keyword arguments forwarded to
+        ``datamapplot.create_interactive_plot``.
+
+    Returns
+    -------
+    datamapplot.InteractiveFigure
+        The interactive figure object; displays inline in Jupyter notebooks.
+    """
+    import datamapplot
+
+    coords = df[[x_col, y_col]].values
+    labels = df[label_col].values
+
+    hover_text = _build_hover_text(df, hover_cols, colour_col)
+    if hover_text is not None:
+        kwargs.setdefault("hover_text", hover_text)
+
+    if colour_col is not None:
+        kwargs["marker_color_array"] = _build_marker_color_array(df, colour_col)
+
+    if title is not None:
+        kwargs["title"] = title
+
+    return datamapplot.create_interactive_plot(coords, labels, **kwargs)

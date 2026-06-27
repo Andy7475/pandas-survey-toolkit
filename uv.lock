@@ -2543,6 +2543,7 @@ name = "pandas-survey-toolkit"
 source = { editable = "." }
 dependencies = [
     { name = "altair" },
+    { name = "datamapplot" },
     { name = "gensim" },
     { name = "pandas" },
     { name = "pandas-flavor" },
@@ -2573,6 +2574,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "altair", specifier = ">=5.4,<7.0" },
+    { name = "datamapplot", specifier = ">=0.7.3" },
     { name = "gensim", specifier = ">=4.3.3,<5.0" },
     { name = "pandas", specifier = ">=2.2.0,<3.0" },
     { name = "pandas-flavor", specifier = ">=0.6.0,<1.0" },
