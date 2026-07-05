@@ -283,34 +283,11 @@ def test_dont_know_with_slash():
     assert result.loc[4, "likert_encoded_Q1"] == 0
 
 
-def test_encode_likert_scale_5(sample_df2):
-    """scale=5 keeps agreement intensity (±2 for strongly/very variants)."""
-    result = sample_df2.encode_likert(["Q1", "Q4"], scale=5, debug=False)
-
-    # Strongly Agree -> 2, Disagree -> -1, Neutral -> 0, Agree -> 1,
-    # Strongly Disagree -> -2
-    assert list(result["likert_encoded_Q1"]) == [2, -1, 0, 1, -2]
-    # Very Satisfied -> 2, neither... -> 0, dissatisfied -> -1,
-    # very dis-satisfied -> -2, satisfied -> 1
-    assert list(result["likert_encoded_Q4"]) == [2, 0, -1, -2, 1]
-
-
-def test_encode_likert_scale_3_collapses_intensity(sample_df2):
-    """scale=3 (default) collapses strong variants onto ±1."""
-    result = sample_df2.encode_likert(["Q1"], scale=3, debug=False)
-    assert list(result["likert_encoded_Q1"]) == [1, -1, 0, 1, -1]
-
-
-def test_encode_likert_invalid_scale(sample_df2):
-    with pytest.raises(ValueError):
-        sample_df2.encode_likert(["Q1"], scale=4)
-
-
 @pytest.fixture
 def small_survey_df():
     """Few respondents (6) but many questions (10) with two opposite groups.
 
-    This is the regime where UMAP+HDBSCAN struggles but respondent-correlation
+    This is the regime where UMAP+HDBSCAN struggles but cosine + hierarchical
     clustering excels.
     """
     agree_first = ["Agree"] * 5 + ["Disagree"] * 5
@@ -322,11 +299,9 @@ def small_survey_df():
     return df, questions
 
 
-def test_cluster_respondents_correlation_separates_groups(small_survey_df):
+def test_cluster_respondents_cosine_separates_groups(small_survey_df):
     df, questions = small_survey_df
-    result = df.cluster_respondents_correlation(
-        columns=questions, n_clusters=2, debug=False
-    )
+    result = df.cluster_respondents_cosine(columns=questions, n_clusters=2, debug=False)
 
     assert "respondent_cluster_id" in result.columns
     labels = result["respondent_cluster_id"].tolist()
@@ -338,69 +313,74 @@ def test_cluster_respondents_correlation_separates_groups(small_survey_df):
     assert "respondent_linkage" in result.attrs
 
 
-def test_cluster_respondents_correlation_default_threshold(small_survey_df):
+def test_cluster_respondents_cosine_separates_agreers_from_disagreers():
+    """Cosine clusters all-agree and all-disagree respondents into two distinct
+    groups - Pearson could not (they are zero-variance and undefined)."""
+    q = [f"Q{i}" for i in range(1, 7)]
+    df = pd.DataFrame([["Agree"] * 6] * 4 + [["Disagree"] * 6] * 4, columns=q)
+    labels = df.cluster_respondents_cosine(columns=q, n_clusters=2, debug=False)[
+        "respondent_cluster_id"
+    ].tolist()
+    assert labels[:4] == [labels[0]] * 4 and labels[0] != -1
+    assert labels[4:] == [labels[4]] * 4 and labels[4] != -1
+    assert labels[0] != labels[4]
+
+
+def test_cluster_respondents_cosine_default_threshold(small_survey_df):
     df, questions = small_survey_df
-    result = df.cluster_respondents_correlation(columns=questions, debug=False)
-    # Default distance_threshold=1.0 separates positively- from
-    # negatively-correlated respondents into (at least) two groups.
+    result = df.cluster_respondents_cosine(columns=questions, debug=False)
+    # Default cosine distance_threshold=1.0 splits opposite-direction respondents
+    # into (at least) two groups.
     non_noise = [c for c in result["respondent_cluster_id"].unique() if c != -1]
     assert len(non_noise) >= 2
 
 
-def test_cluster_respondents_correlation_absolute_vs_signed():
-    """'absolute' groups perfect opposites together; 'signed' splits them."""
-    pro = ["Agree"] * 5 + ["Disagree"] * 5
-    anti = ["Disagree"] * 5 + ["Agree"] * 5  # exact mirror of pro
-    questions = [f"Q{i}" for i in range(1, 11)]
-    df = pd.DataFrame([pro, pro, anti, anti], columns=questions)
-
-    signed = df.cluster_respondents_correlation(
-        columns=questions, n_clusters=2, distance="signed", debug=False
-    )
-    slabels = signed["respondent_cluster_id"].tolist()
-    assert slabels[0] == slabels[1] and slabels[2] == slabels[3]
-    assert slabels[0] != slabels[2]  # opposite camps split
-
-    absolute = df.cluster_respondents_correlation(
-        columns=questions, n_clusters=2, distance="absolute", debug=False
-    )
-    alabels = absolute["respondent_cluster_id"]
-    # Mirror-image respondents are treated as identical -> all one bloc.
-    assert alabels.nunique() == 1
-    assert (alabels != -1).all()
-
-
-def test_cluster_respondents_correlation_constant_respondent():
-    """A respondent with no variation is left unclustered (-1) with a warning."""
+def test_cluster_respondents_cosine_all_neutral():
+    """An all-neutral (zero) respondent has no direction -> unclustered (-1)."""
     df = pd.DataFrame(
         {
-            "Q1": ["Agree", "Disagree", "Agree"],
-            "Q2": ["Agree", "Agree", "Disagree"],
-            "Q3": ["Agree", "Disagree", "Agree"],
+            "Q1": ["Neutral", "Disagree", "Agree"],
+            "Q2": ["Neutral", "Agree", "Disagree"],
+            "Q3": ["Neutral", "Disagree", "Agree"],
         }
     )
-    with pytest.warns(UserWarning, match="no variation"):
-        result = df.cluster_respondents_correlation(
+    with pytest.warns(UserWarning, match="all-neutral"):
+        result = df.cluster_respondents_cosine(
             columns=["Q1", "Q2", "Q3"], n_clusters=2, debug=False
         )
-    # Respondent 0 answered "Agree" to everything -> undefined correlation -> -1.
+    # Respondent 0 answered everything neutral -> zero vector -> -1.
     assert result.loc[0, "respondent_cluster_id"] == -1
 
 
-def test_cluster_respondents_correlation_conflicting_cut_args(small_survey_df):
+def test_cluster_respondents_cosine_conflicting_cut_args(small_survey_df):
     df, questions = small_survey_df
     with pytest.raises(ValueError):
-        df.cluster_respondents_correlation(
+        df.cluster_respondents_cosine(
             columns=questions, n_clusters=2, distance_threshold=0.5, debug=False
         )
 
 
-def test_cluster_respondents_columns(sample_df):
+def test_cluster_respondents_auto_uses_cosine(sample_df):
+    """The dispatcher picks cosine for a small/medium survey (no UMAP coords)."""
     result = sample_df.cluster_respondents(columns=["Q1", "Q2", "Q3", "Q4"])
+    assert "respondent_cluster_id" in result.columns
+    assert "likert_umap_x" not in result.columns  # cosine path, not UMAP
+
+
+def test_cluster_respondents_umap_method(sample_df):
+    """method='umap' runs the UMAP path (embeds coordinates + probability)."""
+    result = sample_df.cluster_respondents(
+        columns=["Q1", "Q2", "Q3", "Q4"], method="umap"
+    )
     assert "respondent_cluster_id" in result.columns
     assert "respondent_cluster_probability" in result.columns
     assert "likert_umap_x" in result.columns
     assert "likert_umap_y" in result.columns
+
+
+def test_cluster_respondents_invalid_method(sample_df):
+    with pytest.raises(ValueError):
+        sample_df.cluster_respondents(columns=["Q1", "Q2"], method="banana")
 
 
 @pytest.fixture
@@ -448,16 +428,16 @@ def test_cluster_questions_returns_series(question_groups_df):
     assert isinstance(s.to_csv(), str)
 
 
-def test_cluster_questions_constant_question():
-    """A question everyone answers identically is left unclustered (-1)."""
+def test_cluster_questions_all_neutral_question():
+    """A question everyone answers neutral is a zero vector -> unclustered (-1)."""
     df = pd.DataFrame(
         {
-            "Q1": ["Agree", "Agree", "Agree"],  # constant -> undefined correlation
+            "Q1": ["Neutral", "Neutral", "Neutral"],  # zero vector, no direction
             "Q2": ["Agree", "Disagree", "Agree"],
             "Q3": ["Disagree", "Agree", "Disagree"],
         }
     )
-    with pytest.warns(UserWarning, match="no variation"):
+    with pytest.warns(UserWarning, match="all-neutral"):
         s = df.cluster_questions(columns=["Q1", "Q2", "Q3"], n_clusters=2, debug=False)
     assert s["Q1"] == -1
 
@@ -466,7 +446,7 @@ def test_cluster_survey_populates_attrs(sample_df):
     """cluster_survey clusters both axes and stashes plain-typed attrs."""
     result = sample_df.cluster_survey(columns=["Q1", "Q2", "Q3", "Q4"])
     assert "respondent_cluster_id" in result.columns
-    assert result.attrs["respondent_method"] == "correlation"  # small survey -> auto
+    assert result.attrs["respondent_method"] == "cosine"  # small survey -> auto
     # attrs are all plain (list/dict/scalar) so pandas ops still work.
     assert isinstance(result.attrs["question_cluster_id"], dict)
     assert isinstance(result.attrs["question_order"], list)
@@ -481,8 +461,8 @@ def test_cluster_survey_umap_warns_on_small(small_survey_df):
         df.cluster_survey(columns=questions, respondent_method="umap")
 
 
-def test_cluster_respondents_small_sample_warns(small_survey_df):
-    """Default min_cluster_size (20) exceeds the 6 respondents -> guard warning."""
+def test_cluster_respondents_umap_small_sample_warns(small_survey_df):
+    """The UMAP path shrinks min_cluster_size (with a warning) on a tiny survey."""
     df, questions = small_survey_df
     with pytest.warns(UserWarning, match="exceeds the number of complete respondents"):
-        df.cluster_respondents(columns=questions)
+        df.cluster_respondents_umap(columns=questions)

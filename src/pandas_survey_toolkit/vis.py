@@ -391,13 +391,14 @@ def plot_respondent_dendrogram(
     df: pd.DataFrame,
     label_col: Optional[str] = None,
     color_threshold: Optional[float] = None,
-    title: str = "Respondent clustering (correlation distance)",
+    title: str = "Respondent clustering (cosine distance)",
     ax=None,
     **dendrogram_kwargs,
 ):
-    """Draw the dendrogram produced by ``cluster_respondents_correlation``.
+    """Draw the dendrogram produced by ``cluster_respondents_cosine``.
 
-    ``cluster_respondents_correlation`` stores its scipy linkage matrix on
+    ``cluster_respondents_cosine`` (directly, or via ``cluster_respondents`` /
+    ``cluster_survey``) stores its scipy linkage matrix on
     ``df.attrs["respondent_linkage"]`` and the clustered respondent index on
     ``df.attrs["respondent_linkage_index"]``. This helper renders that linkage as
     a hierarchical dendrogram so you can see how respondents merge and choose a
@@ -407,7 +408,7 @@ def plot_respondent_dendrogram(
     ----------
     df : pd.DataFrame
         A DataFrame returned by
-        :func:`pandas_survey_toolkit.nlp.cluster_respondents_correlation`.
+        :func:`pandas_survey_toolkit.nlp.cluster_respondents_cosine`.
     label_col : str, optional
         Column to use for leaf labels (e.g. a respondent id column). If None,
         the DataFrame index is used.
@@ -431,7 +432,7 @@ def plot_respondent_dendrogram(
     ------
     KeyError
         If the DataFrame does not carry the linkage produced by
-        ``cluster_respondents_correlation``.
+        ``cluster_respondents_cosine``.
     """
     import matplotlib.pyplot as plt
     from scipy.cluster.hierarchy import dendrogram
@@ -439,7 +440,7 @@ def plot_respondent_dendrogram(
     if "respondent_linkage" not in df.attrs:
         raise KeyError(
             "No linkage found on df.attrs['respondent_linkage']. Run "
-            "cluster_respondents_correlation first (and keep the DataFrame it "
+            "cluster_respondents_cosine first (and keep the DataFrame it "
             "returns, since df.attrs travels with it)."
         )
 
@@ -464,7 +465,7 @@ def plot_respondent_dendrogram(
         **dendrogram_kwargs,
     )
     ax.set_title(title)
-    ax.set_ylabel("Correlation distance")
+    ax.set_ylabel("Cosine distance")
     return ax
 
 
@@ -473,7 +474,6 @@ def survey_clustermap(
     columns: Optional[List[str]] = None,
     pattern: Optional[str] = None,
     likert_mapping: Optional[dict] = None,
-    scale: int = 3,
     linkage_method: str = "average",
     label_col: Optional[str] = None,
     max_width: int = 30,
@@ -482,10 +482,10 @@ def survey_clustermap(
     """Biclustered clustermap of individual respondents x questions (seaborn).
 
     Rows are respondents and columns are questions, each reordered by
-    hierarchical **correlation** clustering with marginal dendrograms, so
-    coherent blocks of like-minded respondents and co-answered questions line
-    up. The colour scheme is a red -> yellow -> green diverging map (red =
-    disagree, green = agree), matching the sentiment colours of
+    hierarchical **cosine** clustering with marginal dendrograms, so coherent
+    blocks of like-minded respondents and co-answered questions line up. The
+    colour scheme is a red -> yellow -> green diverging map (red = disagree,
+    green = agree), matching the sentiment colours of
     :func:`cluster_heatmap_plot`.
 
     This view shows *every* respondent, so it is best for surveys with **few
@@ -503,8 +503,6 @@ def survey_clustermap(
         Regex to match question columns (used if ``columns`` is None).
     likert_mapping : dict, optional
         Custom Likert mapping (see :func:`pandas_survey_toolkit.nlp.encode_likert`).
-    scale : int, optional
-        Encoding scale (3 or 5). Also sets the colour limits (+/-1 or +/-2).
     linkage_method : str, optional
         scipy linkage method for both axes. Default "average".
     label_col : str, optional
@@ -522,7 +520,7 @@ def survey_clustermap(
     Raises
     ------
     ValueError
-        If fewer than two respondents or two questions have any variation.
+        If fewer than two respondents or two questions have a non-neutral answer.
     """
     import seaborn as sns
 
@@ -532,9 +530,7 @@ def survey_clustermap(
     columns = _select_likert_columns(df, columns, pattern)
     encoded_columns = [f"likert_encoded_{c}" for c in columns]
     if not all(c in df.columns for c in encoded_columns):
-        df = df.encode_likert(
-            columns, custom_mapping=likert_mapping, scale=scale, debug=False
-        )
+        df = df.encode_likert(columns, custom_mapping=likert_mapping, debug=False)
 
     data = df[encoded_columns].astype(float).copy()
     data.columns = [
@@ -546,24 +542,22 @@ def survey_clustermap(
     if label_col is not None and label_col in df.columns:
         data.index = df[label_col].astype(str).values
 
-    # Correlation clustering needs variation on both axes; drop degenerate
-    # rows/cols and fill remaining gaps with 0 (neutral).
-    data = data.dropna(how="all")
-    data = data.loc[data.std(axis=1) > 0, data.std(axis=0) > 0]
-    data = data.fillna(0.0)
+    # Cosine distance is undefined for an all-neutral (zero) vector, so drop
+    # all-zero rows/cols after filling gaps with 0 (neutral).
+    data = data.dropna(how="all").fillna(0.0)
+    data = data.loc[(data != 0).any(axis=1), (data != 0).any(axis=0)]
     if data.shape[0] < 2 or data.shape[1] < 2:
         raise ValueError(
-            "Need at least two respondents and two questions with variation to "
-            "draw a clustermap."
+            "Need at least two respondents and two questions with a non-neutral "
+            "answer to draw a clustermap."
         )
 
-    limit = 2 if scale == 5 else 1
-    clustermap_kwargs.setdefault("metric", "correlation")
+    clustermap_kwargs.setdefault("metric", "cosine")
     clustermap_kwargs.setdefault("method", linkage_method)
     clustermap_kwargs.setdefault("cmap", "RdYlGn")
     clustermap_kwargs.setdefault("center", 0)
-    clustermap_kwargs.setdefault("vmin", -limit)
-    clustermap_kwargs.setdefault("vmax", limit)
+    clustermap_kwargs.setdefault("vmin", -1)
+    clustermap_kwargs.setdefault("vmax", 1)
     clustermap_kwargs.setdefault("cbar_kws", {"label": "sentiment"})
 
     return sns.clustermap(data, **clustermap_kwargs)

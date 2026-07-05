@@ -65,7 +65,7 @@ def test_plot_respondent_dendrogram():
     df = pd.DataFrame([agree_first] * 3 + [disagree_first] * 3, columns=questions)
     df["respondent_id"] = range(len(df))
 
-    clustered = df.cluster_respondents_correlation(
+    clustered = df.cluster_respondents_cosine(
         columns=questions, n_clusters=2, debug=False
     )
     ax = plot_respondent_dendrogram(clustered, label_col="respondent_id")
@@ -102,15 +102,15 @@ def test_survey_clustermap_returns_grid(survey_text_df):
     import matplotlib.pyplot as plt
 
     df, questions = survey_text_df
-    g = survey_clustermap(df, columns=questions, label_col="respondent_id", scale=5)
+    g = survey_clustermap(df, columns=questions, label_col="respondent_id")
     assert g is not None
     assert hasattr(g, "fig")
     plt.close("all")
 
 
 def test_survey_clustermap_needs_variation():
-    """Too few varying respondents/questions raises a clear error."""
-    df = pd.DataFrame({"Q1": ["Agree", "Agree"], "Q2": ["Agree", "Agree"]})
+    """All-neutral data is a zero vector on every axis -> clear error."""
+    df = pd.DataFrame({"Q1": ["Neutral", "Neutral"], "Q2": ["Neutral", "Neutral"]})
     with pytest.raises(ValueError):
         survey_clustermap(df, columns=["Q1", "Q2"])
 
