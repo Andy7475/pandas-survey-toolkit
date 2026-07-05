@@ -25,8 +25,15 @@ It will measure the sentiment in terms or postive / neutral / negative and assig
 ## Topic analysis
 Involves TFIDF and word co-occurence to gain some high level insights into the likely topics
 
-## Clustering likert questions (or other responses)
-For strongly disagree ... neutral ... strong agree type responses, it will groups all those questions together to identity groups of respondents within your survey data. This can be much more useful than overall averages across the survey.
+## Clustering respondents by their Likert answers
+For strongly disagree ... neutral ... strongly agree type responses, this groups respondents who answer along similar lines, which can be far more useful than overall averages across the survey.
+
+Two approaches are available:
+
+- `df.cluster_respondents(...)` — UMAP (cosine) + HDBSCAN. Best when you have **many respondents**.
+- `df.cluster_respondents_correlation(...)` — respondent correlation + hierarchical (dendrogram) clustering. Best when you have **few respondents relative to the number of questions**, because each correlation is estimated across all the questions.
+
+`encode_likert(..., scale=5)` keeps the intensity of agreement (strongly agree/disagree → ±2). See [`docs/source/clustering_methods_comparison.md`](docs/source/clustering_methods_comparison.md) for the maths behind the two methods and guidance on encoding and small surveys. (`cluster_questions` is a deprecated alias for `cluster_respondents`.)
 
 ## Visualisation
 Functions to help make sense of the clusters and topics you have identified using the above functions (in development)

@@ -317,3 +317,115 @@ def test_dont_know_with_slash():
     assert result.loc[2, "likert_encoded_Q1"] == 1
     assert result.loc[3, "likert_encoded_Q1"] == -1
     assert result.loc[4, "likert_encoded_Q1"] == 0
+
+
+def test_encode_likert_scale_5(sample_df2):
+    """scale=5 keeps agreement intensity (±2 for strongly/very variants)."""
+    result = sample_df2.encode_likert(["Q1", "Q4"], scale=5, debug=False)
+
+    # Strongly Agree -> 2, Disagree -> -1, Neutral -> 0, Agree -> 1,
+    # Strongly Disagree -> -2
+    assert list(result["likert_encoded_Q1"]) == [2, -1, 0, 1, -2]
+    # Very Satisfied -> 2, neither... -> 0, dissatisfied -> -1,
+    # very dis-satisfied -> -2, satisfied -> 1
+    assert list(result["likert_encoded_Q4"]) == [2, 0, -1, -2, 1]
+
+
+def test_encode_likert_scale_3_collapses_intensity(sample_df2):
+    """scale=3 (default) collapses strong variants onto ±1."""
+    result = sample_df2.encode_likert(["Q1"], scale=3, debug=False)
+    assert list(result["likert_encoded_Q1"]) == [1, -1, 0, 1, -1]
+
+
+def test_encode_likert_invalid_scale(sample_df2):
+    with pytest.raises(ValueError):
+        sample_df2.encode_likert(["Q1"], scale=4)
+
+
+@pytest.fixture
+def small_survey_df():
+    """Few respondents (6) but many questions (10) with two opposite groups.
+
+    This is the regime where UMAP+HDBSCAN struggles but respondent-correlation
+    clustering excels.
+    """
+    agree_first = ["Agree"] * 5 + ["Disagree"] * 5
+    disagree_first = ["Disagree"] * 5 + ["Agree"] * 5
+    rows = [agree_first] * 3 + [disagree_first] * 3
+    questions = [f"Q{i}" for i in range(1, 11)]
+    df = pd.DataFrame(rows, columns=questions)
+    df["respondent_id"] = range(len(df))
+    return df, questions
+
+
+def test_cluster_respondents_correlation_separates_groups(small_survey_df):
+    df, questions = small_survey_df
+    result = df.cluster_respondents_correlation(
+        columns=questions, n_clusters=2, debug=False
+    )
+
+    assert "respondent_cluster_id" in result.columns
+    labels = result["respondent_cluster_id"].tolist()
+    # Two planted groups should land in two distinct, non-noise clusters.
+    assert set(labels[:3]) == {labels[0]} and labels[0] != -1
+    assert set(labels[3:6]) == {labels[3]} and labels[3] != -1
+    assert labels[0] != labels[3]
+    # Linkage is exposed for the dendrogram helper.
+    assert "respondent_linkage" in result.attrs
+
+
+def test_cluster_respondents_correlation_default_threshold(small_survey_df):
+    df, questions = small_survey_df
+    result = df.cluster_respondents_correlation(columns=questions, debug=False)
+    # Default distance_threshold=1.0 separates positively- from
+    # negatively-correlated respondents into (at least) two groups.
+    non_noise = [c for c in result["respondent_cluster_id"].unique() if c != -1]
+    assert len(non_noise) >= 2
+
+
+def test_cluster_respondents_correlation_constant_respondent():
+    """A respondent with no variation is left unclustered (-1) with a warning."""
+    df = pd.DataFrame(
+        {
+            "Q1": ["Agree", "Disagree", "Agree"],
+            "Q2": ["Agree", "Agree", "Disagree"],
+            "Q3": ["Agree", "Disagree", "Agree"],
+        }
+    )
+    with pytest.warns(UserWarning, match="same answer to every"):
+        result = df.cluster_respondents_correlation(
+            columns=["Q1", "Q2", "Q3"], n_clusters=2, debug=False
+        )
+    # Respondent 0 answered "Agree" to everything -> undefined correlation -> -1.
+    assert result.loc[0, "respondent_cluster_id"] == -1
+
+
+def test_cluster_respondents_correlation_conflicting_cut_args(small_survey_df):
+    df, questions = small_survey_df
+    with pytest.raises(ValueError):
+        df.cluster_respondents_correlation(
+            columns=questions, n_clusters=2, distance_threshold=0.5, debug=False
+        )
+
+
+def test_cluster_respondents_columns(sample_df):
+    result = sample_df.cluster_respondents(columns=["Q1", "Q2", "Q3", "Q4"])
+    assert "respondent_cluster_id" in result.columns
+    assert "respondent_cluster_probability" in result.columns
+    assert "likert_umap_x" in result.columns
+    assert "likert_umap_y" in result.columns
+
+
+def test_cluster_questions_deprecated_alias(sample_df):
+    with pytest.warns(DeprecationWarning):
+        result = sample_df.cluster_questions(columns=["Q1", "Q2", "Q3", "Q4"])
+    # Backwards-compatible output column names are preserved.
+    assert "question_cluster_id" in result.columns
+    assert "question_cluster_probability" in result.columns
+
+
+def test_cluster_respondents_small_sample_warns(small_survey_df):
+    """Default min_cluster_size (20) exceeds the 6 respondents -> guard warning."""
+    df, questions = small_survey_df
+    with pytest.warns(UserWarning, match="exceeds the number of complete respondents"):
+        df.cluster_respondents(columns=questions)
