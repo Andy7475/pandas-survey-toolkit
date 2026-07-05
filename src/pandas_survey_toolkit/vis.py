@@ -355,3 +355,84 @@ def datamap_interactive_plot(
         kwargs["title"] = title
 
     return datamapplot.create_interactive_plot(coords, labels, **kwargs)
+
+
+def plot_respondent_dendrogram(
+    df: pd.DataFrame,
+    label_col: Optional[str] = None,
+    color_threshold: Optional[float] = None,
+    title: str = "Respondent clustering (correlation distance)",
+    ax=None,
+    **dendrogram_kwargs,
+):
+    """Draw the dendrogram produced by ``cluster_respondents_correlation``.
+
+    ``cluster_respondents_correlation`` stores its scipy linkage matrix on
+    ``df.attrs["respondent_linkage"]`` and the clustered respondent index on
+    ``df.attrs["respondent_linkage_index"]``. This helper renders that linkage as
+    a hierarchical dendrogram so you can see how respondents merge and choose a
+    cut.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        A DataFrame returned by
+        :func:`pandas_survey_toolkit.nlp.cluster_respondents_correlation`.
+    label_col : str, optional
+        Column to use for leaf labels (e.g. a respondent id column). If None,
+        the DataFrame index is used.
+    color_threshold : float, optional
+        Distance at which to colour the branches (passed straight to scipy's
+        ``dendrogram``). Handy to visualise the cut used for clustering.
+    title : str, optional
+        Plot title.
+    ax : matplotlib.axes.Axes, optional
+        Axis to draw on. A new figure/axis is created if None.
+    **dendrogram_kwargs
+        Extra keyword arguments forwarded to
+        :func:`scipy.cluster.hierarchy.dendrogram`.
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+        The axis the dendrogram was drawn on.
+
+    Raises
+    ------
+    KeyError
+        If the DataFrame does not carry the linkage produced by
+        ``cluster_respondents_correlation``.
+    """
+    import matplotlib.pyplot as plt
+    from scipy.cluster.hierarchy import dendrogram
+
+    if "respondent_linkage" not in df.attrs:
+        raise KeyError(
+            "No linkage found on df.attrs['respondent_linkage']. Run "
+            "cluster_respondents_correlation first (and keep the DataFrame it "
+            "returns, since df.attrs travels with it)."
+        )
+
+    linkage_matrix = df.attrs["respondent_linkage"]
+    index = df.attrs.get("respondent_linkage_index")
+
+    if label_col is not None and index is not None:
+        labels = df.loc[index, label_col].astype(str).tolist()
+    elif index is not None:
+        labels = [str(i) for i in index]
+    else:
+        labels = None
+
+    if ax is None:
+        _, ax = plt.subplots(figsize=(10, max(4, 0.25 * len(linkage_matrix))))
+
+    dendrogram(
+        linkage_matrix,
+        labels=labels,
+        color_threshold=color_threshold,
+        ax=ax,
+        **dendrogram_kwargs,
+    )
+    ax.set_title(title)
+    ax.set_ylabel("Correlation distance")
+    return ax

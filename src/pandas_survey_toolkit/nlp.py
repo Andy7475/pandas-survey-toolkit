@@ -15,10 +15,15 @@ from gensim.parsing.preprocessing import (
     strip_numeric,
     strip_tags,
 )
+from scipy.cluster.hierarchy import fcluster, linkage
+from scipy.spatial.distance import squareform
 from scipy.special import softmax
 from sentence_transformers import SentenceTransformer
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+# Importing analytics registers the fit_umap / fit_cluster_hdbscan dataframe
+# methods that cluster_respondents relies on.
+from pandas_survey_toolkit import analytics  # noqa: F401
 from pandas_survey_toolkit.utils import (
     apply_vectorizer,
     combine_results,
@@ -26,31 +31,52 @@ from pandas_survey_toolkit.utils import (
 )
 
 
+def _select_likert_columns(df, columns, pattern):
+    """Resolve the list of Likert columns from an explicit list or a regex."""
+    if columns is None and pattern is None:
+        raise ValueError("Either 'columns' or 'pattern' must be provided.")
+    if columns is None:
+        columns = df.filter(regex=pattern).columns.tolist()
+    return columns
+
+
 @pf.register_dataframe_method
-def cluster_questions(
+def cluster_respondents(
     df,
     columns=None,
     pattern=None,
     likert_mapping=None,
+    scale=3,
     umap_n_neighbors=15,
     umap_min_dist=0.1,
     hdbscan_min_cluster_size=20,
     hdbscan_min_samples=None,
     cluster_selection_epsilon=0.4,
+    output_columns=("respondent_cluster_id", "respondent_cluster_probability"),
+    debug=False,
 ):
-    """Cluster Likert scale questions based on response patterns.
+    """Cluster *respondents* by their Likert response patterns (UMAP + HDBSCAN).
+
+    Each respondent (row) is turned into a vector of encoded answers and embedded
+    with UMAP (cosine metric), then grouped with HDBSCAN. Because UMAP embeds one
+    point *per respondent*, this method needs a reasonable number of respondents
+    to work well. When respondents are few (roughly, fewer than the number of
+    questions) prefer :func:`cluster_respondents_correlation`. See
+    ``docs/source/clustering_methods_comparison.md`` for the maths.
 
     Parameters
     ----------
     df : pandas.DataFrame
         The input DataFrame.
     columns : list, optional
-        List of column names to cluster. If None, all columns matching
-        the pattern will be used.
+        List of question column names to use. If None, ``pattern`` is used.
     pattern : str, optional
-        Regex pattern to match column names. Used if columns is None.
+        Regex pattern to match column names. Used if ``columns`` is None.
     likert_mapping : dict, optional
-        Custom mapping for Likert scale responses. If None, default mapping is used.
+        Custom mapping for Likert scale responses. If None, the built-in
+        ``scale``-point mapping is used.
+    scale : int, optional
+        Encoding scale passed to :func:`encode_likert` (3 or 5). Default is 3.
     umap_n_neighbors : int, optional
         The size of local neighborhood for UMAP. Default is 15.
     umap_min_dist : float, optional
@@ -61,8 +87,11 @@ def cluster_questions(
         The number of samples in a neighborhood for a core point in HDBSCAN.
         Default is None.
     cluster_selection_epsilon : float, optional
-        A distance threshold. Clusters below this value will be merged. Default is 0.4.
-        Higher epsilon means fewer, larger clusters.
+        A distance threshold. Clusters below this value will be merged. Default
+        is 0.4. Higher epsilon means fewer, larger clusters.
+    output_columns : tuple, optional
+        Names for the (cluster id, cluster probability) output columns. Default
+        is ("respondent_cluster_id", "respondent_cluster_probability").
 
     Returns
     -------
@@ -75,15 +104,34 @@ def cluster_questions(
     ValueError
         If neither 'columns' nor 'pattern' is provided.
     """
-    # Select columns
-    if columns is None and pattern is None:
-        raise ValueError("Either 'columns' or 'pattern' must be provided.")
-    elif columns is None:
-        columns = df.filter(regex=pattern).columns.tolist()
+    columns = _select_likert_columns(df, columns, pattern)
 
     # Encode Likert scales
-    df = df.encode_likert(columns, custom_mapping=likert_mapping)
+    df = df.encode_likert(
+        columns, custom_mapping=likert_mapping, scale=scale, debug=debug
+    )
     encoded_columns = [f"likert_encoded_{col}" for col in columns]
+
+    # Guard against surveys that are too small for density-based clustering.
+    # HDBSCAN raises if min_samples exceeds the number of points, and cannot
+    # form a cluster of ``min_cluster_size`` if there are fewer respondents than
+    # that. Shrink the parameters (with a warning) so the call degrades to a
+    # trivial result instead of erroring, and point users at the correlation
+    # method which is designed for this regime.
+    n_respondents = int(df[encoded_columns].notna().all(axis=1).sum())
+    effective_min_cluster_size = hdbscan_min_cluster_size
+    effective_min_samples = hdbscan_min_samples
+    if hdbscan_min_cluster_size > n_respondents:
+        effective_min_cluster_size = max(2, n_respondents)
+        if effective_min_samples is not None:
+            effective_min_samples = min(effective_min_samples, n_respondents)
+        warnings.warn(
+            f"hdbscan_min_cluster_size ({hdbscan_min_cluster_size}) exceeds the "
+            f"number of complete respondents ({n_respondents}); reducing it to "
+            f"{effective_min_cluster_size}. UMAP+HDBSCAN is unreliable with so few "
+            "respondents - consider cluster_respondents_correlation, which is "
+            "designed for surveys with few respondents and many questions."
+        )
 
     # Apply UMAP
     df = df.fit_umap(
@@ -97,9 +145,9 @@ def cluster_questions(
     # Apply HDBSCAN
     df = df.fit_cluster_hdbscan(
         input_columns=["likert_umap_x", "likert_umap_y"],
-        output_columns=["question_cluster_id", "question_cluster_probability"],
-        min_cluster_size=hdbscan_min_cluster_size,
-        min_samples=hdbscan_min_samples,
+        output_columns=list(output_columns),
+        min_cluster_size=effective_min_cluster_size,
+        min_samples=effective_min_samples,
         cluster_selection_epsilon=cluster_selection_epsilon,
     )
 
@@ -107,8 +155,221 @@ def cluster_questions(
 
 
 @pf.register_dataframe_method
+def cluster_questions(df, **kwargs):
+    """Deprecated alias for :func:`cluster_respondents`.
+
+    Despite its name this always clustered *respondents* (one UMAP point per
+    row), not questions. It is retained for backwards compatibility and emits a
+    ``DeprecationWarning``; the output columns keep their historical names
+    (``question_cluster_id`` / ``question_cluster_probability``). New code should
+    call :func:`cluster_respondents` or :func:`cluster_respondents_correlation`.
+    """
+    warnings.warn(
+        "cluster_questions is deprecated and clusters respondents, not questions."
+        " Use cluster_respondents (UMAP+HDBSCAN) or"
+        " cluster_respondents_correlation (better for few respondents) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return df.cluster_respondents(
+        output_columns=("question_cluster_id", "question_cluster_probability"),
+        **kwargs,
+    )
+
+
+@pf.register_dataframe_method
+def cluster_respondents_correlation(
+    df,
+    columns=None,
+    pattern=None,
+    likert_mapping=None,
+    scale=3,
+    corr_method="pearson",
+    linkage_method="average",
+    distance="signed",
+    n_clusters=None,
+    distance_threshold=None,
+    output_column="respondent_cluster_id",
+    debug=False,
+):
+    """Cluster respondents using correlation + hierarchical (dendrogram) clustering.
+
+    This is the recommended approach when there are **few respondents relative to
+    the number of questions**. Rather than embedding respondents as points (which
+    UMAP/HDBSCAN need many of), it correlates every pair of respondents *across
+    the questions* and runs agglomerative clustering on the resulting distance
+    matrix. Each correlation is estimated over all the questions, so the estimates
+    stay stable even when respondents are scarce. See
+    ``docs/source/clustering_methods_comparison.md`` for the maths.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    columns : list, optional
+        List of question column names to use. If None, ``pattern`` is used.
+    pattern : str, optional
+        Regex pattern to match column names. Used if ``columns`` is None.
+    likert_mapping : dict, optional
+        Custom mapping for Likert scale responses. If None, the built-in
+        ``scale``-point mapping is used.
+    scale : int, optional
+        Encoding scale passed to :func:`encode_likert` (3 or 5). Default is 3.
+        Use 5 if the intensity of agreement should influence the grouping.
+    corr_method : str, optional
+        Correlation method passed to :meth:`pandas.DataFrame.corr`
+        ("pearson", "spearman" or "kendall"). Default is "pearson", which
+        centres each respondent and therefore groups by response *shape* rather
+        than overall positivity (acquiescence bias).
+    linkage_method : str, optional
+        Linkage method for :func:`scipy.cluster.hierarchy.linkage`
+        ("average", "complete", "single", ...). Default is "average".
+        (Ward is not offered because it requires raw Euclidean coordinates, not a
+        precomputed correlation-distance matrix.)
+    distance : str, optional
+        How to turn a correlation ``r`` into a distance. "signed" -> ``1 - r``
+        (opposite responders are far apart; the default), or "absolute" ->
+        ``1 - |r|`` (group by strength of association regardless of sign).
+
+        Use "signed" to find opinion *camps* (the usual segmentation goal;
+        "absolute" would wrongly merge opposite camps). Reach for "absolute" only
+        when you want to group by the *axis* of (dis)agreement rather than the
+        side: e.g. a two-stage analysis that first isolates the polarised bloc
+        (both camps) from respondents who are off that axis, then splits it with
+        "signed"; matched/adversarial dyads where a perfect opposite is a strong
+        relationship (buyer/seller, prosecution/defence); or as a safety net
+        against reverse-keyed items that were not reverse-scored. See the
+        "when does absolute make sense" note in
+        ``docs/source/clustering_methods_comparison.md``.
+    n_clusters : int, optional
+        If given, cut the dendrogram to produce exactly this many clusters
+        (``criterion="maxclust"``). Mutually exclusive with ``distance_threshold``.
+    distance_threshold : float, optional
+        If given, cut the dendrogram at this cophenetic distance
+        (``criterion="distance"``): respondents merge into the same cluster while
+        their distance stays below the threshold. Higher threshold -> fewer,
+        larger clusters (more disagreement tolerated); lower -> more, smaller
+        clusters. If neither ``n_clusters`` nor ``distance_threshold`` is
+        provided, a threshold of 1.0 is used (which splits positively- from
+        non-positively-correlated respondents; for a 10-question survey that is
+        roughly "disagree on 5+ questions").
+
+        Rule of thumb (``distance="signed"``, +/-1 agree/disagree encoding): two
+        respondents sit about ``2 * d / Q`` apart, where ``d`` is the number of
+        questions they answer oppositely and ``Q`` is the number of questions.
+        So each disagreement moves them ~``2/Q`` further apart (0.2 per
+        disagreement for Q=10). To split respondents who disagree on ``k`` or
+        more questions, set the threshold roughly halfway between the ``k-1`` and
+        ``k`` steps: ``threshold ~= (2*k - 1) / Q`` (e.g. Q=10: ~0.3 to split at
+        2+ disagreements, ~0.5 at 3+, ~0.7 at 4+). The default Pearson distance
+        runs a touch lower than ``2 d / Q``, so lean to the low side if you must
+        guarantee the split. Neutrals and the +/-2 scale change the per-question
+        weight (a neutral-vs-agree question is a half step; a strongly-vs-
+        strongly opposition on the 5-point scale counts double), so the count
+        interpretation is cleanest for pure +/-1 data. See
+        ``docs/source/clustering_methods_comparison.md`` for the derivation.
+    output_column : str, optional
+        Name of the cluster-id column to add. Default is "respondent_cluster_id".
+
+    Returns
+    -------
+    pandas.DataFrame
+        The input DataFrame with the encoded Likert columns and an integer
+        cluster-id column. Respondents that could not be clustered (NaN answers,
+        or constant answers giving undefined correlation) receive ``-1``. The
+        scipy linkage matrix and the clustered respondent index are stored on
+        ``df.attrs["respondent_linkage"]`` / ``df.attrs["respondent_linkage_index"]``
+        so a dendrogram can be drawn (see
+        :func:`pandas_survey_toolkit.vis.plot_respondent_dendrogram`).
+
+    Raises
+    ------
+    ValueError
+        If neither 'columns' nor 'pattern' is provided, if both ``n_clusters``
+        and ``distance_threshold`` are given, or for an unknown ``distance``.
+
+    Notes
+    -----
+    This method builds an ``n_respondents x n_respondents`` distance matrix, so
+    it is meant for small-to-medium surveys. With many thousands of respondents
+    prefer :func:`cluster_respondents` (UMAP + HDBSCAN), which scales far better.
+    """
+    if n_clusters is not None and distance_threshold is not None:
+        raise ValueError("Provide at most one of 'n_clusters' or 'distance_threshold'.")
+    if distance not in ("signed", "absolute"):
+        raise ValueError(f"distance must be 'signed' or 'absolute', got {distance!r}.")
+
+    columns = _select_likert_columns(df, columns, pattern)
+
+    df = df.encode_likert(
+        columns, custom_mapping=likert_mapping, scale=scale, debug=debug
+    )
+    encoded_columns = [f"likert_encoded_{col}" for col in columns]
+
+    df = df.copy()
+    df[output_column] = -1
+
+    # Keep only respondents with a complete set of answers.
+    masked_df, mask = create_masked_df(df, encoded_columns)
+    responses = masked_df[encoded_columns].astype(float)
+
+    # Respondents with no variation across questions have an undefined
+    # correlation with everyone; exclude them (they stay labelled -1).
+    varying = responses.std(axis=1) > 0
+    if not varying.all():
+        warnings.warn(
+            f"{int((~varying).sum())} respondent(s) gave the same answer to every "
+            "question; their correlation is undefined so they are left unclustered "
+            "(cluster -1)."
+        )
+    responses = responses[varying]
+
+    if len(responses) < 2:
+        warnings.warn(
+            "Fewer than two respondents can be correlated; no clusters formed."
+        )
+        return df
+
+    # Correlate respondents against each other across the questions.
+    corr = responses.T.corr(method=corr_method)
+
+    if distance == "signed":
+        dist = 1.0 - corr
+    else:  # "absolute"
+        dist = 1.0 - corr.abs()
+
+    # Guard against tiny floating-point artefacts before condensing.
+    dist_values = dist.to_numpy()
+    dist_values = (dist_values + dist_values.T) / 2.0
+    np.fill_diagonal(dist_values, 0.0)
+    dist_values = np.clip(dist_values, 0.0, None)
+
+    condensed = squareform(dist_values, checks=False)
+    linkage_matrix = linkage(condensed, method=linkage_method)
+
+    if n_clusters is not None:
+        labels = fcluster(linkage_matrix, t=n_clusters, criterion="maxclust")
+    else:
+        threshold = 1.0 if distance_threshold is None else distance_threshold
+        labels = fcluster(linkage_matrix, t=threshold, criterion="distance")
+
+    df.loc[responses.index, output_column] = labels.astype(int)
+
+    # Expose the linkage so callers can draw a dendrogram.
+    df.attrs["respondent_linkage"] = linkage_matrix
+    df.attrs["respondent_linkage_index"] = list(responses.index)
+
+    return df
+
+
+@pf.register_dataframe_method
 def encode_likert(
-    df, likert_columns, output_prefix="likert_encoded_", custom_mapping=None, debug=True
+    df,
+    likert_columns,
+    output_prefix="likert_encoded_",
+    custom_mapping=None,
+    scale=3,
+    debug=True,
 ):
     """Encode Likert scale responses to numeric values.
 
@@ -121,7 +382,18 @@ def encode_likert(
     output_prefix : str, optional
         Prefix for the new encoded columns. Default is 'likert_encoded_'.
     custom_mapping : dict, optional
-        Optional custom mapping for Likert scale responses.
+        Optional custom mapping for Likert scale responses. If provided, the
+        built-in ``scale`` mapping is ignored.
+    scale : int, optional
+        Number of points for the built-in mapping. Either 3 (default) or 5.
+
+        - ``3``: agree/disagree collapse to +1/-1 regardless of intensity.
+        - ``5``: intensity is preserved, so "strongly agree" -> +2,
+          "agree" -> +1, neutral -> 0, "disagree" -> -1,
+          "strongly disagree" -> -2. Use this when the *magnitude* of
+          sentiment should count towards the distance between respondents
+          (see the encoding discussion in
+          ``docs/source/clustering_methods_comparison.md``).
     debug : bool, optional
         If True, prints out the mappings. Default is True.
 
@@ -132,13 +404,23 @@ def encode_likert(
 
     Notes
     -----
-    Default mapping:
+    Default (3-point) mapping:
     - -1: Phrases containing 'disagree', 'do not agree', etc.
     - 0: Phrases containing 'neutral', 'neither', 'unsure', etc.
     - +1: Phrases containing 'agree' (but not 'disagree' or 'not agree')
     - NaN: NaN values are preserved
+
+    With ``scale=5`` an "intensifier" (strongly/very/completely/totally/
+    extremely/highly) on an agree/disagree phrase pushes the value out to
+    +2 / -2.
     """
+    if scale not in (3, 5):
+        raise ValueError(f"scale must be 3 or 5, got {scale}.")
+
     df = df.copy()
+
+    # Values a valid built-in mapping is allowed to produce.
+    valid_values = {-1, 0, 1} if scale == 3 else {-2, -1, 0, 1, 2}
 
     def default_mapping(response):
         if pd.isna(response):
@@ -151,15 +433,22 @@ def encode_likert(
         ):
             return 0
 
-        # Disagree / Dissatisfied (-1)
+        # Intensity modifier (only affects the 5-point scale)
+        strong = bool(
+            re.search(
+                r"\b(strongly|very|completely|totally|extremely|highly)\b", response
+            )
+        )
+
+        # Disagree / Dissatisfied (-1, or -2 when strong on the 5-point scale)
         if re.search(r"\b(disagree)\b", response) or re.search(
             r"\b(dis|not|no)[-]{0,1}\s*(agree|satisf)", response
         ):
-            return -1
+            return -2 if (scale == 5 and strong) else -1
 
-        # Agree / Satisfied (1)
+        # Agree / Satisfied (1, or +2 when strong on the 5-point scale)
         if re.search(r"\bagree\b", response) or re.search(r"satisf", response):
-            return 1
+            return 2 if (scale == 5 and strong) else 1
 
         # Unable to classify
         return None
@@ -170,10 +459,15 @@ def encode_likert(
     if custom_mapping is None:
         mapping_func = default_mapping
         if debug:
-            print("Using default mapping:")
+            print(f"Using default {scale}-point mapping:")
             print("-1: Phrases containing 'disagree', 'do not agree', etc.")
             print(" 0: Phrases containing 'neutral', 'neither', 'unsure', etc.")
             print("+1: Phrases containing 'agree' (but not 'disagree' or 'not agree')")
+            if scale == 5:
+                print(
+                    "±2: An intensifier (strongly/very/etc.) pushes agree/disagree"
+                    " out to +2/-2"
+                )
             print("NaN: NaN values are preserved")
     else:
 
@@ -215,7 +509,7 @@ def encode_likert(
         for column in likert_columns:
             all_responses.update(df[column].dropna().unique())
         unconverted = [
-            resp for resp in all_responses if default_mapping(resp) not in [-1, 0, 1]
+            resp for resp in all_responses if default_mapping(resp) not in valid_values
         ]
         if unconverted:
             warnings.warn(

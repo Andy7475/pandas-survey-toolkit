@@ -10,12 +10,14 @@ import pytest
 
 matplotlib.use("Agg")
 
+import pandas_survey_toolkit.nlp  # noqa: E402, F401  (registers DataFrame methods)
 from pandas_survey_toolkit.vis import (  # noqa: E402
     _build_hover_text,
     _build_marker_color_array,
     cluster_heatmap_plot,
     datamap_interactive_plot,
     datamap_plot,
+    plot_respondent_dendrogram,
 )
 
 
@@ -50,6 +52,30 @@ def test_custom_max_width(heatmap_df):
         max_width=40,
     )
     assert isinstance(chart, alt.VConcatChart)
+
+
+def test_plot_respondent_dendrogram():
+    """The dendrogram helper renders the linkage stored by the correlation method."""
+    import matplotlib.pyplot as plt
+
+    agree_first = ["Agree"] * 4 + ["Disagree"] * 4
+    disagree_first = ["Disagree"] * 4 + ["Agree"] * 4
+    questions = [f"Q{i}" for i in range(1, 9)]
+    df = pd.DataFrame([agree_first] * 3 + [disagree_first] * 3, columns=questions)
+    df["respondent_id"] = range(len(df))
+
+    clustered = df.cluster_respondents_correlation(
+        columns=questions, n_clusters=2, debug=False
+    )
+    ax = plot_respondent_dendrogram(clustered, label_col="respondent_id")
+    assert ax is not None
+    plt.close("all")
+
+
+def test_plot_respondent_dendrogram_requires_linkage():
+    """Without a stored linkage the helper raises a clear KeyError."""
+    with pytest.raises(KeyError):
+        plot_respondent_dendrogram(pd.DataFrame({"a": [1, 2, 3]}))
 
 
 def test_strongly_positive_cluster():
