@@ -6,7 +6,13 @@ import numpy as np
 import pandas as pd
 
 
-def cluster_heatmap_plot(df: pd.DataFrame, x: str, y: List[str], max_width: int = 75):
+def cluster_heatmap_plot(
+    df: pd.DataFrame,
+    x: str,
+    y: List[str],
+    max_width: int = 75,
+    question_order: Optional[List[str]] = None,
+):
     """
     Create a heatmap visualization of Likert scale responses grouped by clusters.
 
@@ -33,6 +39,13 @@ def cluster_heatmap_plot(df: pd.DataFrame, x: str, y: List[str], max_width: int 
     max_width : int, default=75
         Maximum width for wrapping question labels in the visualization.
 
+    question_order : list of str, optional
+        Encoded question column names in the order to display them (top to
+        bottom), typically the dendrogram order so clustered questions sit
+        together. If omitted, it is read from ``df.attrs["question_order"]``
+        (set by :func:`pandas_survey_toolkit.nlp.cluster_survey`); if that is
+        also absent the questions keep the order of ``y``.
+
     Returns
     -------
     alt.VConcatChart
@@ -58,9 +71,26 @@ def cluster_heatmap_plot(df: pd.DataFrame, x: str, y: List[str], max_width: int 
     >>> heatmap = cluster_heatmap_plot(df, x="question_cluster_id", y=likert_columns)
     >>> display(heatmap)
     """
-    # Convert -1, 0, 1 to percent positive and percent negative
-    df_positive = df[y].apply(lambda col: (col == 1).astype(int))
-    df_negative = df[y].apply(lambda col: (col == -1).astype(int))
+    # Order the question rows by their cluster so similar questions sit together.
+    # Uses an explicit ``question_order`` if given, else the one stashed on
+    # ``df.attrs["question_order"]`` by ``cluster_survey`` / ``cluster_questions``.
+    if question_order is None:
+        question_order = df.attrs.get("question_order")
+    if question_order:
+        ordered = [c for c in question_order if c in y]
+        y = ordered + [c for c in y if c not in ordered]
+
+    # Work on a plain copy with attrs cleared: heavy objects that helpers may
+    # stash in ``df.attrs`` (linkages etc.) otherwise trip up pandas' attrs
+    # propagation during the melt/concat below.
+    df = df[[x] + list(y)].copy()
+    df.attrs = {}
+
+    # Convert encoded responses to percent positive and percent negative.
+    # Counting > 0 / < 0 (rather than == 1 / == -1) keeps the 3-point behaviour
+    # identical while also supporting the 5-point (+/-2) encoding.
+    df_positive = df[y].apply(lambda col: (col > 0).astype(int))
+    df_negative = df[y].apply(lambda col: (col < 0).astype(int))
 
     # Calculate average percent positive and negative for each cluster and question
     heatmap_data_pos = (
@@ -413,7 +443,7 @@ def plot_respondent_dendrogram(
             "returns, since df.attrs travels with it)."
         )
 
-    linkage_matrix = df.attrs["respondent_linkage"]
+    linkage_matrix = np.asarray(df.attrs["respondent_linkage"], dtype=float)
     index = df.attrs.get("respondent_linkage_index")
 
     if label_col is not None and index is not None:
@@ -436,3 +466,104 @@ def plot_respondent_dendrogram(
     ax.set_title(title)
     ax.set_ylabel("Correlation distance")
     return ax
+
+
+def survey_clustermap(
+    df: pd.DataFrame,
+    columns: Optional[List[str]] = None,
+    pattern: Optional[str] = None,
+    likert_mapping: Optional[dict] = None,
+    scale: int = 3,
+    linkage_method: str = "average",
+    label_col: Optional[str] = None,
+    max_width: int = 30,
+    **clustermap_kwargs,
+):
+    """Biclustered clustermap of individual respondents x questions (seaborn).
+
+    Rows are respondents and columns are questions, each reordered by
+    hierarchical **correlation** clustering with marginal dendrograms, so
+    coherent blocks of like-minded respondents and co-answered questions line
+    up. The colour scheme is a red -> yellow -> green diverging map (red =
+    disagree, green = agree), matching the sentiment colours of
+    :func:`cluster_heatmap_plot`.
+
+    This view shows *every* respondent, so it is best for surveys with **few
+    respondents**. For thousands of respondents use :func:`cluster_heatmap_plot`,
+    which collapses respondents into clusters and adds a cluster-size bar chart.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Raw survey data (encoding is done internally) or a frame already
+        containing ``likert_encoded_*`` columns.
+    columns : list of str, optional
+        Question columns to plot. If None, ``pattern`` is used.
+    pattern : str, optional
+        Regex to match question columns (used if ``columns`` is None).
+    likert_mapping : dict, optional
+        Custom Likert mapping (see :func:`pandas_survey_toolkit.nlp.encode_likert`).
+    scale : int, optional
+        Encoding scale (3 or 5). Also sets the colour limits (+/-1 or +/-2).
+    linkage_method : str, optional
+        scipy linkage method for both axes. Default "average".
+    label_col : str, optional
+        Column to label the respondent (row) axis with. Defaults to the index.
+    max_width : int, optional
+        Wrap width for question (column) labels.
+    **clustermap_kwargs
+        Extra keyword arguments forwarded to :func:`seaborn.clustermap`.
+
+    Returns
+    -------
+    seaborn.matrix.ClusterGrid
+        The clustermap grid (``.fig`` for the figure).
+
+    Raises
+    ------
+    ValueError
+        If fewer than two respondents or two questions have any variation.
+    """
+    import seaborn as sns
+
+    import pandas_survey_toolkit.nlp  # noqa: F401  registers encode_likert
+    from pandas_survey_toolkit.nlp import _select_likert_columns
+
+    columns = _select_likert_columns(df, columns, pattern)
+    encoded_columns = [f"likert_encoded_{c}" for c in columns]
+    if not all(c in df.columns for c in encoded_columns):
+        df = df.encode_likert(
+            columns, custom_mapping=likert_mapping, scale=scale, debug=False
+        )
+
+    data = df[encoded_columns].astype(float).copy()
+    data.columns = [
+        textwrap.fill(
+            c.replace("likert_encoded_", "").replace("_", " "), width=max_width
+        )
+        for c in encoded_columns
+    ]
+    if label_col is not None and label_col in df.columns:
+        data.index = df[label_col].astype(str).values
+
+    # Correlation clustering needs variation on both axes; drop degenerate
+    # rows/cols and fill remaining gaps with 0 (neutral).
+    data = data.dropna(how="all")
+    data = data.loc[data.std(axis=1) > 0, data.std(axis=0) > 0]
+    data = data.fillna(0.0)
+    if data.shape[0] < 2 or data.shape[1] < 2:
+        raise ValueError(
+            "Need at least two respondents and two questions with variation to "
+            "draw a clustermap."
+        )
+
+    limit = 2 if scale == 5 else 1
+    clustermap_kwargs.setdefault("metric", "correlation")
+    clustermap_kwargs.setdefault("method", linkage_method)
+    clustermap_kwargs.setdefault("cmap", "RdYlGn")
+    clustermap_kwargs.setdefault("center", 0)
+    clustermap_kwargs.setdefault("vmin", -limit)
+    clustermap_kwargs.setdefault("vmax", limit)
+    clustermap_kwargs.setdefault("cbar_kws", {"label": "sentiment"})
+
+    return sns.clustermap(data, **clustermap_kwargs)

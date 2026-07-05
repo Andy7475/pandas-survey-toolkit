@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-import spacy
 
 # Import the functions to test
 from pandas_survey_toolkit.nlp import (
@@ -36,53 +35,11 @@ def sample_df():
     )
 
 
-def test_cluster_questions_columns(sample_df):
-    result = sample_df.cluster_questions(columns=["Q1", "Q2", "Q3", "Q4"])
-    assert "question_cluster_id" in result.columns
-    assert "question_cluster_probability" in result.columns
-    assert "likert_umap_x" in result.columns
-    assert "likert_umap_y" in result.columns
-
-
 def test_cluster_questions_pattern(sample_df):
-    result = sample_df.cluster_questions(pattern="^Q")
-    assert "question_cluster_id" in result.columns
-    assert "question_cluster_probability" in result.columns
-    assert "likert_umap_x" in result.columns
-    assert "likert_umap_y" in result.columns
-
-
-def test_cluster_questions_custom_mapping(sample_df):
-    custom_mapping = {
-        "strongly agree": 2,
-        "agree": 1,
-        "neutral": 0,
-        "disagree": -1,
-        "strongly disagree": -2,
-    }
-    result = sample_df.cluster_questions(
-        columns=["Q1", "Q2", "Q3", "Q4"], likert_mapping=custom_mapping
-    )
-    assert "question_cluster_id" in result.columns
-    assert "question_cluster_probability" in result.columns
-
-
-def test_cluster_questions_umap_parameters(sample_df):
-    result = sample_df.cluster_questions(
-        columns=["Q1", "Q2", "Q3", "Q4"], umap_n_neighbors=10, umap_min_dist=0.05
-    )
-    assert "likert_umap_x" in result.columns
-    assert "likert_umap_y" in result.columns
-
-
-def test_cluster_questions_hdbscan_parameters(sample_df):
-    result = sample_df.cluster_questions(
-        columns=["Q1", "Q2", "Q3", "Q4"],
-        hdbscan_min_cluster_size=10,
-        hdbscan_min_samples=5,
-    )
-    assert "question_cluster_id" in result.columns
-    assert "question_cluster_probability" in result.columns
+    """cluster_questions accepts a regex pattern and returns a per-question Series."""
+    s = sample_df.cluster_questions(pattern="^Q", n_clusters=2, debug=False)
+    assert isinstance(s, pd.Series)
+    assert set(s.index) == {"Q1", "Q2", "Q3", "Q4"}
 
 
 def test_cluster_questions_error_no_columns_or_pattern(sample_df):
@@ -92,6 +49,9 @@ def test_cluster_questions_error_no_columns_or_pattern(sample_df):
 
 # Test for fit_sentence_transformer
 def test_fit_sentence_transformer():
+    pytest.importorskip(
+        "sentence_transformers", reason="needs the optional 'nlp' extra"
+    )
     df = pd.DataFrame(
         {
             "text": ["Hello world", "Test sentence", np.nan, "Another test"],
@@ -107,6 +67,7 @@ def test_fit_sentence_transformer():
 
 
 def test_extract_sentiment():
+    pytest.importorskip("transformers", reason="needs the optional 'nlp' extra")
     # Create a sample DataFrame
     df = pd.DataFrame(
         {
@@ -168,6 +129,9 @@ def test_extract_sentiment():
 
 
 def test_fit_spacy():
+    pytest.importorskip("spacy", reason="needs the optional 'nlp' extra")
+    import spacy
+
     # Create a sample DataFrame
     df = pd.DataFrame(
         {"comments": ["This is a test", "Another comment", np.nan, "SpaCy is cool"]}
@@ -415,7 +379,7 @@ def test_cluster_respondents_correlation_constant_respondent():
             "Q3": ["Agree", "Disagree", "Agree"],
         }
     )
-    with pytest.warns(UserWarning, match="same answer to every"):
+    with pytest.warns(UserWarning, match="no variation"):
         result = df.cluster_respondents_correlation(
             columns=["Q1", "Q2", "Q3"], n_clusters=2, debug=False
         )
@@ -439,12 +403,82 @@ def test_cluster_respondents_columns(sample_df):
     assert "likert_umap_y" in result.columns
 
 
-def test_cluster_questions_deprecated_alias(sample_df):
-    with pytest.warns(DeprecationWarning):
-        result = sample_df.cluster_questions(columns=["Q1", "Q2", "Q3", "Q4"])
-    # Backwards-compatible output column names are preserved.
-    assert "question_cluster_id" in result.columns
-    assert "question_cluster_probability" in result.columns
+@pytest.fixture
+def question_groups_df():
+    """Q1==Q2 follow one response pattern, Q3==Q4 follow an uncorrelated one."""
+    p1 = [
+        "Agree",
+        "Disagree",
+        "Agree",
+        "Agree",
+        "Disagree",
+        "Agree",
+        "Disagree",
+        "Disagree",
+        "Agree",
+        "Disagree",
+    ]
+    p2 = [
+        "Disagree",
+        "Disagree",
+        "Agree",
+        "Disagree",
+        "Agree",
+        "Agree",
+        "Agree",
+        "Disagree",
+        "Disagree",
+        "Agree",
+    ]
+    return pd.DataFrame({"Q1": p1, "Q2": p1, "Q3": p2, "Q4": p2})
+
+
+def test_cluster_questions_returns_series(question_groups_df):
+    """cluster_questions returns a per-question Series that groups co-answered Qs."""
+    s = question_groups_df.cluster_questions(
+        columns=["Q1", "Q2", "Q3", "Q4"], n_clusters=2, debug=False
+    )
+    assert isinstance(s, pd.Series)
+    assert list(s.index) == ["Q1", "Q2", "Q3", "Q4"]  # original names
+    assert s["Q1"] == s["Q2"]  # identical questions cluster together
+    assert s["Q3"] == s["Q4"]
+    assert s["Q1"] != s["Q3"]  # the two groups are distinct
+    # Ordering + linkage exposed on attrs; Series is CSV-able for other analysis.
+    assert set(s.attrs["question_order"]) == {"Q1", "Q2", "Q3", "Q4"}
+    assert isinstance(s.to_csv(), str)
+
+
+def test_cluster_questions_constant_question():
+    """A question everyone answers identically is left unclustered (-1)."""
+    df = pd.DataFrame(
+        {
+            "Q1": ["Agree", "Agree", "Agree"],  # constant -> undefined correlation
+            "Q2": ["Agree", "Disagree", "Agree"],
+            "Q3": ["Disagree", "Agree", "Disagree"],
+        }
+    )
+    with pytest.warns(UserWarning, match="no variation"):
+        s = df.cluster_questions(columns=["Q1", "Q2", "Q3"], n_clusters=2, debug=False)
+    assert s["Q1"] == -1
+
+
+def test_cluster_survey_populates_attrs(sample_df):
+    """cluster_survey clusters both axes and stashes plain-typed attrs."""
+    result = sample_df.cluster_survey(columns=["Q1", "Q2", "Q3", "Q4"])
+    assert "respondent_cluster_id" in result.columns
+    assert result.attrs["respondent_method"] == "correlation"  # small survey -> auto
+    # attrs are all plain (list/dict/scalar) so pandas ops still work.
+    assert isinstance(result.attrs["question_cluster_id"], dict)
+    assert isinstance(result.attrs["question_order"], list)
+    # a groupby (which triggers pandas attrs propagation) must not raise
+    result.groupby("respondent_cluster_id").size()
+
+
+def test_cluster_survey_umap_warns_on_small(small_survey_df):
+    """Forcing umap on a tiny survey warns (illogical choice for the size)."""
+    df, questions = small_survey_df
+    with pytest.warns(UserWarning, match="unreliable with only"):
+        df.cluster_survey(columns=questions, respondent_method="umap")
 
 
 def test_cluster_respondents_small_sample_warns(small_survey_df):

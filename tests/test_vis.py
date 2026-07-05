@@ -18,6 +18,7 @@ from pandas_survey_toolkit.vis import (  # noqa: E402
     datamap_interactive_plot,
     datamap_plot,
     plot_respondent_dendrogram,
+    survey_clustermap,
 )
 
 
@@ -76,6 +77,42 @@ def test_plot_respondent_dendrogram_requires_linkage():
     """Without a stored linkage the helper raises a clear KeyError."""
     with pytest.raises(KeyError):
         plot_respondent_dendrogram(pd.DataFrame({"a": [1, 2, 3]}))
+
+
+@pytest.fixture
+def survey_text_df():
+    np.random.seed(7)
+    opts = ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"]
+    df = pd.DataFrame({f"Q{i}": np.random.choice(opts, 30) for i in range(1, 7)})
+    df["respondent_id"] = range(len(df))
+    return df, [f"Q{i}" for i in range(1, 7)]
+
+
+def test_cluster_heatmap_plot_orders_from_cluster_survey(survey_text_df):
+    """A cluster_survey'd frame drives the heatmap's question ordering."""
+    df, questions = survey_text_df
+    out = df.cluster_survey(columns=questions)
+    encoded = [f"likert_encoded_{q}" for q in questions]
+    chart = cluster_heatmap_plot(out, x="respondent_cluster_id", y=encoded)
+    assert isinstance(chart, alt.VConcatChart)
+
+
+def test_survey_clustermap_returns_grid(survey_text_df):
+    """The seaborn clustermap builds for a small survey."""
+    import matplotlib.pyplot as plt
+
+    df, questions = survey_text_df
+    g = survey_clustermap(df, columns=questions, label_col="respondent_id", scale=5)
+    assert g is not None
+    assert hasattr(g, "fig")
+    plt.close("all")
+
+
+def test_survey_clustermap_needs_variation():
+    """Too few varying respondents/questions raises a clear error."""
+    df = pd.DataFrame({"Q1": ["Agree", "Agree"], "Q2": ["Agree", "Agree"]})
+    with pytest.raises(ValueError):
+        survey_clustermap(df, columns=["Q1", "Q2"])
 
 
 def test_strongly_positive_cluster():

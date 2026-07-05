@@ -38,8 +38,44 @@ jobs:
         enable-cache: true
         python-version: ${{ matrix.python-version }}
 
-    - name: Install dependencies
-      run: uv sync --group dev --resolution ${{ matrix.resolution }}
+    - name: Install dependencies (with the optional nlp extra)
+      run: uv sync --group dev --extra nlp --resolution ${{ matrix.resolution }}
 
     - name: Run tests
+      run: uv run pytest tests/ -v --tb=short
+
+  # Verify the Likert clustering / preprocessing functionality works in a
+  # torch-free core install (no 'nlp' extra). The free-text NLP tests skip
+  # themselves via pytest.importorskip when spacy/transformers are absent.
+  test-core:
+    name: Test core-only, no nlp extra (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.10", "3.13"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install core dependencies only (no nlp extra)
+      run: uv sync --group dev
+
+    - name: Assert torch / spacy are NOT installed
+      run: |
+        uv run python - <<'PY'
+        import importlib.util as u
+        for mod in ("torch", "spacy", "sentence_transformers", "transformers"):
+            assert u.find_spec(mod) is None, f"{mod} should not be installed in a core-only env"
+        import pandas_survey_toolkit.nlp  # must import torch-free
+        print("core-only import OK")
+        PY
+
+    - name: Run tests (nlp tests skip automatically)
       run: uv run pytest tests/ -v --tb=short

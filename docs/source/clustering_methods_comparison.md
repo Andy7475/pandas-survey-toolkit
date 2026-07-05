@@ -411,31 +411,82 @@ disagreement itself* (and who lies on it, either pole).
 
 ---
 
+## 7b. Clustering questions, and both axes at once (biclustering)
+
+Everything above clusters **respondents**. You can cluster **questions** the same
+way — it is the exact mirror: instead of correlating respondents *across the
+questions*, correlate the questions *across the respondents* (i.e. `df.corr()` on
+the encoded columns), then cut a dendrogram. `cluster_questions` does this and
+returns a `pd.Series` (question → cluster id):
+
+```python
+question_clusters = df.cluster_questions(columns=questions)   # pandas.Series
+question_clusters.to_csv("question_clusters.csv")             # save for other analysis
+```
+
+Two things follow from the mirror symmetry:
+
+- **The sample-size dependence flips.** Each *question-pair* correlation is
+  estimated over the **respondents**, so question clustering wants *many
+  respondents* — the opposite of respondent clustering. With very few respondents
+  the question groups are still useful for *ordering*, but treat the fine
+  structure as suggestive.
+- **`distance="absolute"`** groups a question with its reverse-scored mirror
+  (two items measuring the same construct with opposite polarity) — occasionally
+  what you want for questions, rarely for respondents.
+
+**Biclustering** — clustering both axes and reordering the heatmap so coherent
+blocks appear — is what makes a survey heatmap *explain itself*: like-minded
+respondents and co-answered questions line up. `cluster_survey` does both axes in
+one call and stashes the orderings so the plotting helpers pick them up
+automatically.
+
+---
+
 ## 8. How to run each approach
 
 ```python
-import pandas_survey_toolkit.nlp  # registers the DataFrame methods
-from pandas_survey_toolkit.vis import plot_respondent_dendrogram
+import pandas_survey_toolkit.nlp  # registers the DataFrame methods (torch-free)
+from pandas_survey_toolkit.vis import (
+    cluster_heatmap_plot,
+    survey_clustermap,
+    plot_respondent_dendrogram,
+)
 
 questions = ["q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "q10"]
 
+# --- individual pieces ---------------------------------------------------
 # Many respondents (thousands+): density-based segmentation and a 2-D map
 df_umap = df.cluster_respondents(columns=questions)          # respondent_cluster_id
 
 # Few respondents / many questions: correlation + dendrogram
 df_corr = df.cluster_respondents_correlation(
     columns=questions,
-    corr_method="pearson",
     distance="signed",          # 1 - r
     distance_threshold=0.3,     # Q=10: split people who disagree on 2+ questions
 )
 plot_respondent_dendrogram(df_corr, label_col="respondent_id")
+
+# Cluster the questions -> Series you can inspect or save
+question_clusters = df.cluster_questions(columns=questions)
+
+# --- everything at once (biclustering) -----------------------------------
+survey = df.cluster_survey(columns=questions)   # respondent_method="auto"
+
+# Altair heatmap (many respondents / few clusters); questions auto-ordered
+cluster_heatmap_plot(survey, x="respondent_cluster_id",
+                     y=[f"likert_encoded_{q}" for q in questions])
+
+# seaborn clustermap (few respondents; shows every respondent) with dendrograms
+survey_clustermap(df, columns=questions, label_col="respondent_id")
 ```
 
 ### One-line summary
 
 UMAP+HDBSCAN and correlation+dendrogram both cluster *respondents*, but UMAP needs
-many respondents (and is the right tool at tens of thousands) while correlation
-needs many questions (and wins on small surveys); on a 10-question survey each
-disagreement is worth about `2/Q ≈ 0.2` of distance, so a `distance_threshold`
-near `(2k−1)/Q` splits people who disagree on `k` or more questions.
+many respondents (right tool at tens of thousands) while correlation needs many
+questions (wins on small surveys); the same correlation machinery clusters
+*questions* (`cluster_questions`, needing many respondents), and `cluster_survey`
+does both axes so the heatmaps order themselves into readable blocks. On a
+10-question survey each disagreement is worth about `2/Q ≈ 0.2` of distance, so a
+`distance_threshold` near `(2k−1)/Q` splits people who disagree on `k`+ questions.

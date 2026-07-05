@@ -6,7 +6,6 @@ from typing import List, Tuple, Union
 import numpy as np
 import pandas as pd
 import pandas_flavor as pf
-import spacy
 from gensim.parsing.preprocessing import (
     remove_stopwords as gensim_remove_stopwords,
 )
@@ -15,12 +14,18 @@ from gensim.parsing.preprocessing import (
     strip_numeric,
     strip_tags,
 )
-from scipy.cluster.hierarchy import fcluster, linkage
+from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from scipy.spatial.distance import squareform
 from scipy.special import softmax
-from sentence_transformers import SentenceTransformer
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+# NOTE: the heavy free-text NLP libraries (spacy, sentence-transformers,
+# transformers, and their torch dependency) are the optional ``nlp`` extra. They
+# are imported lazily inside the functions that need them so that the Likert
+# clustering and text-preprocessing functions (encode_likert, cluster_questions,
+# cluster_respondents, cluster_survey, preprocess_text, clean_survey_columns,
+# ...) work with a torch-free install. gensim is lightweight and stays core.
+#     pip install pandas-survey-toolkit          # clustering + preprocessing
+#     pip install "pandas-survey-toolkit[nlp]"   # + free-text comment embeddings
 # Importing analytics registers the fit_umap / fit_cluster_hdbscan dataframe
 # methods that cluster_respondents relies on.
 from pandas_survey_toolkit import analytics  # noqa: F401
@@ -31,6 +36,15 @@ from pandas_survey_toolkit.utils import (
 )
 
 
+def _require_nlp_extra(feature):
+    """Raise a helpful error when the optional ``nlp`` extra is not installed."""
+    raise ImportError(
+        f"{feature} needs the optional 'nlp' extra (spacy, gensim, "
+        "sentence-transformers, transformers). Install it with:\n"
+        '    pip install "pandas-survey-toolkit[nlp]"'
+    )
+
+
 def _select_likert_columns(df, columns, pattern):
     """Resolve the list of Likert columns from an explicit list or a regex."""
     if columns is None and pattern is None:
@@ -38,6 +52,101 @@ def _select_likert_columns(df, columns, pattern):
     if columns is None:
         columns = df.filter(regex=pattern).columns.tolist()
     return columns
+
+
+def _correlation_cluster(
+    data,
+    *,
+    object_label,
+    corr_method="pearson",
+    linkage_method="average",
+    distance="signed",
+    n_clusters=None,
+    distance_threshold=None,
+):
+    """Hierarchically cluster the *columns* of ``data`` by correlation.
+
+    Shared engine behind :func:`cluster_respondents_correlation` and
+    :func:`cluster_questions`. ``data`` is a numeric DataFrame whose columns are
+    the objects to cluster (respondents or questions) and whose rows are the
+    observations each pairwise correlation is estimated over. Columns with no
+    variation (constant values) have an undefined correlation and are left
+    unclustered (label ``-1``).
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Numeric matrix; its columns are clustered.
+    object_label : str
+        Noun used in warnings ("respondent" or "question").
+    corr_method, linkage_method, distance, n_clusters, distance_threshold
+        See :func:`cluster_respondents_correlation`.
+
+    Returns
+    -------
+    labels : pandas.Series
+        Integer cluster id per column of ``data`` (index == ``data.columns``);
+        ``-1`` marks columns that could not be clustered.
+    linkage_matrix : numpy.ndarray or None
+        scipy linkage over the clustered columns (ordered as ``clustered``), or
+        ``None`` if fewer than two columns could be clustered.
+    clustered : list
+        Clustered column names in original order (matches the linkage leaves).
+    order : list
+        Clustered column names in dendrogram-leaf order (adjacent == similar).
+    """
+    if distance not in ("signed", "absolute"):
+        raise ValueError(f"distance must be 'signed' or 'absolute', got {distance!r}.")
+    if n_clusters is not None and distance_threshold is not None:
+        raise ValueError("Provide at most one of 'n_clusters' or 'distance_threshold'.")
+
+    labels = pd.Series(-1, index=data.columns, dtype=int)
+
+    std = data.std(axis=0, skipna=True)
+    clustered = list(std[std > 0].index)  # NaN std (all-NaN column) excluded too
+    n_degenerate = len(data.columns) - len(clustered)
+    if n_degenerate:
+        warnings.warn(
+            f"{n_degenerate} {object_label}(s) had no variation (identical values);"
+            " their correlation is undefined so they are left unclustered (cluster -1)."
+        )
+
+    if len(clustered) < 2:
+        warnings.warn(
+            f"Fewer than two {object_label}s could be correlated; no clusters formed."
+        )
+        return labels, None, clustered, clustered
+
+    corr = data[clustered].corr(method=corr_method)
+    # Pairwise-complete correlations can be NaN when two columns never co-occur;
+    # treat those pairs as uncorrelated (distance 1) so the matrix stays valid.
+    corr = corr.fillna(0.0)
+
+    if distance == "signed":
+        dist = 1.0 - corr
+    else:  # "absolute"
+        dist = 1.0 - corr.abs()
+
+    dist_values = dist.to_numpy()
+    dist_values = (dist_values + dist_values.T) / 2.0
+    np.fill_diagonal(dist_values, 0.0)
+    dist_values = np.clip(dist_values, 0.0, None)
+
+    linkage_matrix = linkage(
+        squareform(dist_values, checks=False), method=linkage_method
+    )
+
+    if n_clusters is not None:
+        lab = fcluster(linkage_matrix, t=n_clusters, criterion="maxclust")
+    else:
+        threshold = 1.0 if distance_threshold is None else distance_threshold
+        lab = fcluster(linkage_matrix, t=threshold, criterion="distance")
+
+    labels.loc[clustered] = lab.astype(int)
+    leaves = dendrogram(linkage_matrix, no_plot=True)["leaves"]
+    order = [clustered[i] for i in leaves]
+
+    return labels, linkage_matrix, clustered, order
 
 
 @pf.register_dataframe_method
@@ -155,26 +264,135 @@ def cluster_respondents(
 
 
 @pf.register_dataframe_method
-def cluster_questions(df, **kwargs):
-    """Deprecated alias for :func:`cluster_respondents`.
+def cluster_questions(
+    df,
+    columns=None,
+    pattern=None,
+    likert_mapping=None,
+    scale=3,
+    corr_method="pearson",
+    linkage_method="average",
+    distance="signed",
+    n_clusters=None,
+    distance_threshold=None,
+    debug=False,
+):
+    """Cluster *questions* by how respondents co-answer them.
 
-    Despite its name this always clustered *respondents* (one UMAP point per
-    row), not questions. It is retained for backwards compatibility and emits a
-    ``DeprecationWarning``; the output columns keep their historical names
-    (``question_cluster_id`` / ``question_cluster_probability``). New code should
-    call :func:`cluster_respondents` or :func:`cluster_respondents_correlation`.
+    This groups questions that get similar response patterns across respondents,
+    purely from the data (no NLP on the question text). It is the mirror of
+    :func:`cluster_respondents_correlation`: instead of correlating respondents
+    across the questions, it correlates the questions across the respondents
+    (equivalent to ``df[encoded].corr()``), then runs hierarchical clustering.
+
+    Because each question-pair correlation is estimated over the *respondents*,
+    this is most reliable when you have a reasonable number of respondents; with
+    very few respondents the groupings are still useful for ordering but treat
+    the fine structure as suggestive. See
+    ``docs/source/clustering_methods_comparison.md``.
+
+    .. note::
+        This is a breaking change from v1.x, where ``cluster_questions`` was a
+        deprecated alias that actually clustered *respondents*. It now clusters
+        questions. Use :func:`cluster_respondents` /
+        :func:`cluster_respondents_correlation` to cluster respondents.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    columns : list, optional
+        Question column names to cluster. If None, ``pattern`` is used.
+    pattern : str, optional
+        Regex pattern to match column names. Used if ``columns`` is None.
+    likert_mapping : dict, optional
+        Custom mapping for Likert responses (see :func:`encode_likert`).
+    scale : int, optional
+        Encoding scale passed to :func:`encode_likert` (3 or 5). Default is 3.
+    corr_method : str, optional
+        Correlation method for :meth:`pandas.DataFrame.corr` ("pearson",
+        "spearman", "kendall"). Default "pearson".
+    linkage_method : str, optional
+        scipy linkage method ("average", "complete", ...). Default "average".
+    distance : str, optional
+        "signed" -> ``1 - r`` (default) or "absolute" -> ``1 - |r|`` (groups a
+        question with its reverse-scored mirror; useful for questions that
+        measure the same construct with opposite polarity).
+    n_clusters : int, optional
+        Cut the dendrogram to exactly this many clusters. Mutually exclusive
+        with ``distance_threshold``.
+    distance_threshold : float, optional
+        Cophenetic-distance cut (defaults to 1.0 when neither is given, i.e.
+        split positively- from non-positively-correlated questions).
+    debug : bool, optional
+        Forwarded to :func:`encode_likert`. Default False.
+
+    Returns
+    -------
+    pandas.Series
+        A Series **indexed by the original question column names**, giving an
+        integer cluster id per question (``-1`` for a question everyone answered
+        identically, whose correlation is undefined). The scipy linkage and the
+        dendrogram-leaf orderings are attached on ``.attrs``:
+        ``.attrs["linkage"]``, ``.attrs["question_order"]`` (original names,
+        similar questions adjacent) and ``.attrs["encoded_order"]`` (the
+        ``likert_encoded_*`` column names in the same order).
+
+    Examples
+    --------
+    Use it standalone and save the mapping for other analysis::
+
+        question_clusters = df.cluster_questions(columns=likert_cols)
+        # -> pandas.Series indexed by question name, values are cluster ids
+        question_clusters.to_csv("question_clusters.csv")
+
+        # questions grouped, in dendrogram order:
+        for q in question_clusters.attrs["question_order"]:
+            print(question_clusters[q], q)
+
+    Raises
+    ------
+    ValueError
+        If neither 'columns' nor 'pattern' is given, if both ``n_clusters`` and
+        ``distance_threshold`` are given, or for an unknown ``distance``.
     """
-    warnings.warn(
-        "cluster_questions is deprecated and clusters respondents, not questions."
-        " Use cluster_respondents (UMAP+HDBSCAN) or"
-        " cluster_respondents_correlation (better for few respondents) instead.",
-        DeprecationWarning,
-        stacklevel=2,
+    if n_clusters is not None and distance_threshold is not None:
+        raise ValueError("Provide at most one of 'n_clusters' or 'distance_threshold'.")
+    if distance not in ("signed", "absolute"):
+        raise ValueError(f"distance must be 'signed' or 'absolute', got {distance!r}.")
+
+    columns = _select_likert_columns(df, columns, pattern)
+    encoded = df.encode_likert(
+        columns, custom_mapping=likert_mapping, scale=scale, debug=debug
     )
-    return df.cluster_respondents(
-        output_columns=("question_cluster_id", "question_cluster_probability"),
-        **kwargs,
+    encoded_columns = [f"likert_encoded_{col}" for col in columns]
+
+    # rows = respondents, columns = questions -> clustering the columns.
+    responses = encoded[encoded_columns].astype(float)
+
+    labels, linkage_matrix, _clustered, order = _correlation_cluster(
+        responses,
+        object_label="question",
+        corr_method=corr_method,
+        linkage_method=linkage_method,
+        distance=distance,
+        n_clusters=n_clusters,
+        distance_threshold=distance_threshold,
     )
+
+    # Report against the original (un-prefixed) question names.
+    enc_to_orig = dict(zip(encoded_columns, columns))
+    result = pd.Series(
+        labels.to_numpy(),
+        index=[enc_to_orig[c] for c in labels.index],
+        name="question_cluster_id",
+        dtype=int,
+    )
+    result.attrs["linkage"] = linkage_matrix
+    result.attrs["encoded_order"] = order
+    result.attrs["question_order"] = [enc_to_orig[c] for c in order]
+    result.attrs["encoded_columns"] = encoded_columns
+    return result
 
 
 @pf.register_dataframe_method
@@ -313,53 +531,192 @@ def cluster_respondents_correlation(
     masked_df, mask = create_masked_df(df, encoded_columns)
     responses = masked_df[encoded_columns].astype(float)
 
-    # Respondents with no variation across questions have an undefined
-    # correlation with everyone; exclude them (they stay labelled -1).
-    varying = responses.std(axis=1) > 0
-    if not varying.all():
-        warnings.warn(
-            f"{int((~varying).sum())} respondent(s) gave the same answer to every "
-            "question; their correlation is undefined so they are left unclustered "
-            "(cluster -1)."
-        )
-    responses = responses[varying]
+    # Cluster the respondents: transpose so each respondent is a column, then
+    # correlations are estimated across the questions.
+    labels, linkage_matrix, clustered, _order = _correlation_cluster(
+        responses.T,
+        object_label="respondent",
+        corr_method=corr_method,
+        linkage_method=linkage_method,
+        distance=distance,
+        n_clusters=n_clusters,
+        distance_threshold=distance_threshold,
+    )
 
-    if len(responses) < 2:
-        warnings.warn(
-            "Fewer than two respondents can be correlated; no clusters formed."
-        )
-        return df
+    df.loc[labels.index, output_column] = labels.to_numpy()
 
-    # Correlate respondents against each other across the questions.
-    corr = responses.T.corr(method=corr_method)
-
-    if distance == "signed":
-        dist = 1.0 - corr
-    else:  # "absolute"
-        dist = 1.0 - corr.abs()
-
-    # Guard against tiny floating-point artefacts before condensing.
-    dist_values = dist.to_numpy()
-    dist_values = (dist_values + dist_values.T) / 2.0
-    np.fill_diagonal(dist_values, 0.0)
-    dist_values = np.clip(dist_values, 0.0, None)
-
-    condensed = squareform(dist_values, checks=False)
-    linkage_matrix = linkage(condensed, method=linkage_method)
-
-    if n_clusters is not None:
-        labels = fcluster(linkage_matrix, t=n_clusters, criterion="maxclust")
-    else:
-        threshold = 1.0 if distance_threshold is None else distance_threshold
-        labels = fcluster(linkage_matrix, t=threshold, criterion="distance")
-
-    df.loc[responses.index, output_column] = labels.astype(int)
-
-    # Expose the linkage so callers can draw a dendrogram.
-    df.attrs["respondent_linkage"] = linkage_matrix
-    df.attrs["respondent_linkage_index"] = list(responses.index)
+    # Expose the linkage so callers can draw a dendrogram. Store it as a plain
+    # nested list (not a numpy array): non-scalar objects in ``df.attrs`` break
+    # pandas' attrs propagation during melt/concat/groupby.
+    df.attrs["respondent_linkage"] = (
+        linkage_matrix.tolist() if linkage_matrix is not None else None
+    )
+    df.attrs["respondent_linkage_index"] = clustered
 
     return df
+
+
+@pf.register_dataframe_method
+def cluster_survey(
+    df,
+    columns=None,
+    pattern=None,
+    likert_mapping=None,
+    scale=3,
+    respondent_method="auto",
+    corr_method="pearson",
+    linkage_method="average",
+    distance="signed",
+    respondent_n_clusters=None,
+    question_n_clusters=None,
+    distance_threshold=None,
+    size_threshold=1000,
+    debug=False,
+    **umap_kwargs,
+):
+    """Cluster a survey on both axes at once (respondents *and* questions).
+
+    Convenience wrapper that encodes the Likert columns, clusters the
+    respondents and the questions, and stashes everything the plotting helpers
+    need to order both axes. Pass the returned DataFrame straight to
+    :func:`pandas_survey_toolkit.vis.cluster_heatmap_plot` (Altair, collapses
+    respondents into clusters - good for many respondents / few clusters) or
+    :func:`pandas_survey_toolkit.vis.survey_clustermap` (seaborn, per-respondent
+    biclustered map - good for few respondents) and both axes come out in a
+    sensible, cluster-grouped order.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    columns : list, optional
+        Question columns. If None, ``pattern`` is used.
+    pattern : str, optional
+        Regex to match question columns (used if ``columns`` is None).
+    likert_mapping, scale
+        Passed to :func:`encode_likert`.
+    respondent_method : {"auto", "correlation", "umap"}, optional
+        How to cluster respondents. "auto" (default) uses correlation for small
+        surveys (<= ``size_threshold`` respondents) and UMAP+HDBSCAN above that.
+        An explicit choice that is a poor fit for the data size emits a warning
+        (correlation is O(n^2); UMAP needs many respondents).
+    corr_method, linkage_method, distance
+        Correlation clustering options (see
+        :func:`cluster_respondents_correlation`); also used for the questions.
+    respondent_n_clusters, question_n_clusters : int, optional
+        Cut each dendrogram to a fixed number of clusters (per axis).
+    distance_threshold : float, optional
+        Shared cophenetic-distance cut, applied to whichever axis does not have
+        an explicit ``*_n_clusters``.
+    size_threshold : int, optional
+        Respondent count above which "auto" switches to UMAP. Default 1000.
+    debug : bool, optional
+        Forwarded to :func:`encode_likert`. Default False.
+    **umap_kwargs
+        Extra arguments forwarded to :func:`cluster_respondents` when the UMAP
+        path is used.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A copy of ``df`` with the encoded Likert columns and an integer
+        ``respondent_cluster_id`` column. Question clustering and orderings are
+        attached on ``df.attrs`` for the plotting helpers (all plain
+        list/dict/scalar objects, so ``out`` stays safe for further pandas ops):
+
+        - ``question_cluster_id`` : dict (question -> cluster id). For the full
+          Series with linkage attached, call :func:`cluster_questions` directly.
+        - ``question_order`` : encoded question columns in dendrogram order
+        - ``question_linkage`` : scipy linkage over the questions (nested list)
+        - ``respondent_linkage`` / ``respondent_linkage_index`` : present when
+          the correlation respondent method was used
+        - ``respondent_method`` : the method actually used
+
+    Raises
+    ------
+    ValueError
+        For an unknown ``respondent_method`` or invalid clustering options.
+    """
+    if respondent_method not in ("auto", "correlation", "umap"):
+        raise ValueError(
+            "respondent_method must be 'auto', 'correlation' or 'umap', got "
+            f"{respondent_method!r}."
+        )
+
+    columns = _select_likert_columns(df, columns, pattern)
+    n_respondents = int(df[columns].notna().all(axis=1).sum())
+
+    method = respondent_method
+    if method == "auto":
+        method = "correlation" if n_respondents <= size_threshold else "umap"
+    elif method == "correlation" and n_respondents > size_threshold:
+        warnings.warn(
+            f"respondent_method='correlation' builds a {n_respondents}x"
+            f"{n_respondents} distance matrix, which is expensive/infeasible at "
+            "this size; consider 'umap' or 'auto'."
+        )
+    elif method == "umap" and n_respondents < 50:
+        warnings.warn(
+            f"respondent_method='umap' is unreliable with only {n_respondents} "
+            "respondents; consider 'correlation' or 'auto'."
+        )
+
+    # Distance threshold only applies to axes without an explicit cluster count.
+    resp_thr = distance_threshold if respondent_n_clusters is None else None
+    ques_thr = distance_threshold if question_n_clusters is None else None
+
+    if method == "correlation":
+        out = df.cluster_respondents_correlation(
+            columns=columns,
+            likert_mapping=likert_mapping,
+            scale=scale,
+            corr_method=corr_method,
+            linkage_method=linkage_method,
+            distance=distance,
+            n_clusters=respondent_n_clusters,
+            distance_threshold=resp_thr,
+            output_column="respondent_cluster_id",
+            debug=debug,
+        )
+    else:
+        out = df.cluster_respondents(
+            columns=columns,
+            likert_mapping=likert_mapping,
+            scale=scale,
+            output_columns=(
+                "respondent_cluster_id",
+                "respondent_cluster_probability",
+            ),
+            debug=debug,
+            **umap_kwargs,
+        )
+
+    # Questions are few, so correlation clustering is always appropriate here.
+    question_clusters = out.cluster_questions(
+        columns=columns,
+        likert_mapping=likert_mapping,
+        scale=scale,
+        corr_method=corr_method,
+        linkage_method=linkage_method,
+        distance=distance,
+        n_clusters=question_n_clusters,
+        distance_threshold=ques_thr,
+        debug=False,
+    )
+
+    # Store only plain (list/dict/scalar) objects in attrs so downstream pandas
+    # operations on ``out`` (melt/concat/groupby) keep working. The full Series
+    # is available directly from ``cluster_questions`` if needed.
+    q_linkage = question_clusters.attrs.get("linkage")
+    out.attrs["question_cluster_id"] = {
+        str(q): int(c) for q, c in question_clusters.items()
+    }
+    out.attrs["question_order"] = list(question_clusters.attrs.get("encoded_order", []))
+    out.attrs["question_linkage"] = (
+        q_linkage.tolist() if q_linkage is not None else None
+    )
+    out.attrs["respondent_method"] = method
+    return out
 
 
 @pf.register_dataframe_method
@@ -886,6 +1243,10 @@ def fit_sentence_transformer(
     """
 
     # Initialize the sentence transformer model
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError:
+        _require_nlp_extra("fit_sentence_transformer")
     masked_df, mask = create_masked_df(df, [input_column])
     model = SentenceTransformer(model_name)
 
@@ -926,6 +1287,14 @@ def extract_sentiment(
     pandas.DataFrame
         The input DataFrame with additional columns for sentiment scores and labels.
     """
+
+    try:
+        from transformers import (
+            AutoModelForSequenceClassification,
+            AutoTokenizer,
+        )
+    except ImportError:
+        _require_nlp_extra("extract_sentiment")
 
     MODEL = "cardiffnlp/twitter-roberta-base-sentiment"
     tokenizer = AutoTokenizer.from_pretrained(MODEL)
@@ -1139,6 +1508,11 @@ def fit_spacy(df, input_column: str, output_column: str = "spacy_output"):
     If the spaCy model is not already downloaded, this function will attempt
     to download it automatically.
     """
+
+    try:
+        import spacy
+    except ImportError:
+        _require_nlp_extra("fit_spacy")
 
     # Check if the model is downloaded, if not, download it
     try:
