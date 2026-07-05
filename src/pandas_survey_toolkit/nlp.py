@@ -230,14 +230,44 @@ def cluster_respondents_correlation(
         How to turn a correlation ``r`` into a distance. "signed" -> ``1 - r``
         (opposite responders are far apart; the default), or "absolute" ->
         ``1 - |r|`` (group by strength of association regardless of sign).
+
+        Use "signed" to find opinion *camps* (the usual segmentation goal;
+        "absolute" would wrongly merge opposite camps). Reach for "absolute" only
+        when you want to group by the *axis* of (dis)agreement rather than the
+        side: e.g. a two-stage analysis that first isolates the polarised bloc
+        (both camps) from respondents who are off that axis, then splits it with
+        "signed"; matched/adversarial dyads where a perfect opposite is a strong
+        relationship (buyer/seller, prosecution/defence); or as a safety net
+        against reverse-keyed items that were not reverse-scored. See the
+        "when does absolute make sense" note in
+        ``docs/source/clustering_methods_comparison.md``.
     n_clusters : int, optional
         If given, cut the dendrogram to produce exactly this many clusters
         (``criterion="maxclust"``). Mutually exclusive with ``distance_threshold``.
     distance_threshold : float, optional
         If given, cut the dendrogram at this cophenetic distance
-        (``criterion="distance"``). If neither ``n_clusters`` nor
-        ``distance_threshold`` is provided, a threshold of 1.0 is used (which
-        splits positively- from non-positively-correlated respondents).
+        (``criterion="distance"``): respondents merge into the same cluster while
+        their distance stays below the threshold. Higher threshold -> fewer,
+        larger clusters (more disagreement tolerated); lower -> more, smaller
+        clusters. If neither ``n_clusters`` nor ``distance_threshold`` is
+        provided, a threshold of 1.0 is used (which splits positively- from
+        non-positively-correlated respondents; for a 10-question survey that is
+        roughly "disagree on 5+ questions").
+
+        Rule of thumb (``distance="signed"``, +/-1 agree/disagree encoding): two
+        respondents sit about ``2 * d / Q`` apart, where ``d`` is the number of
+        questions they answer oppositely and ``Q`` is the number of questions.
+        So each disagreement moves them ~``2/Q`` further apart (0.2 per
+        disagreement for Q=10). To split respondents who disagree on ``k`` or
+        more questions, set the threshold roughly halfway between the ``k-1`` and
+        ``k`` steps: ``threshold ~= (2*k - 1) / Q`` (e.g. Q=10: ~0.3 to split at
+        2+ disagreements, ~0.5 at 3+, ~0.7 at 4+). The default Pearson distance
+        runs a touch lower than ``2 d / Q``, so lean to the low side if you must
+        guarantee the split. Neutrals and the +/-2 scale change the per-question
+        weight (a neutral-vs-agree question is a half step; a strongly-vs-
+        strongly opposition on the 5-point scale counts double), so the count
+        interpretation is cleanest for pure +/-1 data. See
+        ``docs/source/clustering_methods_comparison.md`` for the derivation.
     output_column : str, optional
         Name of the cluster-id column to add. Default is "respondent_cluster_id".
 
@@ -257,6 +287,12 @@ def cluster_respondents_correlation(
     ValueError
         If neither 'columns' nor 'pattern' is provided, if both ``n_clusters``
         and ``distance_threshold`` are given, or for an unknown ``distance``.
+
+    Notes
+    -----
+    This method builds an ``n_respondents x n_respondents`` distance matrix, so
+    it is meant for small-to-medium surveys. With many thousands of respondents
+    prefer :func:`cluster_respondents` (UMAP + HDBSCAN), which scales far better.
     """
     if n_clusters is not None and distance_threshold is not None:
         raise ValueError("Provide at most one of 'n_clusters' or 'distance_threshold'.")

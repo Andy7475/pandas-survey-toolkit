@@ -383,6 +383,29 @@ def test_cluster_respondents_correlation_default_threshold(small_survey_df):
     assert len(non_noise) >= 2
 
 
+def test_cluster_respondents_correlation_absolute_vs_signed():
+    """'absolute' groups perfect opposites together; 'signed' splits them."""
+    pro = ["Agree"] * 5 + ["Disagree"] * 5
+    anti = ["Disagree"] * 5 + ["Agree"] * 5  # exact mirror of pro
+    questions = [f"Q{i}" for i in range(1, 11)]
+    df = pd.DataFrame([pro, pro, anti, anti], columns=questions)
+
+    signed = df.cluster_respondents_correlation(
+        columns=questions, n_clusters=2, distance="signed", debug=False
+    )
+    slabels = signed["respondent_cluster_id"].tolist()
+    assert slabels[0] == slabels[1] and slabels[2] == slabels[3]
+    assert slabels[0] != slabels[2]  # opposite camps split
+
+    absolute = df.cluster_respondents_correlation(
+        columns=questions, n_clusters=2, distance="absolute", debug=False
+    )
+    alabels = absolute["respondent_cluster_id"]
+    # Mirror-image respondents are treated as identical -> all one bloc.
+    assert alabels.nunique() == 1
+    assert (alabels != -1).all()
+
+
 def test_cluster_respondents_correlation_constant_respondent():
     """A respondent with no variation is left unclustered (-1) with a warning."""
     df = pd.DataFrame(
