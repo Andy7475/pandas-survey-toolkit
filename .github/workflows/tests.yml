@@ -41,6 +41,10 @@ jobs:
     - name: Install dependencies (with the optional nlp extra)
       run: uv sync --group dev --extra nlp --resolution ${{ matrix.resolution }}
 
+    # Pre-fetch model directly with uv so tests don't download at runtime
+    - name: Pre-install spaCy model
+      run: uv pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl
+      
     - name: Run tests
       run: uv run pytest tests/ -v --tb=short
 
