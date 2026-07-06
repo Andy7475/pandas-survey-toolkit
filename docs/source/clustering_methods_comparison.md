@@ -9,7 +9,7 @@ the question text), and how to choose between the methods and tune them.
 - Responses are encoded on a **3-point scale**: −1 (disagree) / 0 (neutral) /
   +1 (agree). Intensity is intentionally ignored.
 - Everything is grouped with **cosine distance**, which compares the *direction*
-  of a response vector. This is the right choice for opinion data (see §3).
+  of a response vector. This is the right choice for opinion data (see §4).
 - **Respondents** (`cluster_respondents`): two engines, picked by survey size —
   - `cluster_respondents_cosine`: cosine distance + hierarchical (dendrogram)
     clustering. Best for **small/medium** surveys. `O(n²)` in respondents.
@@ -19,6 +19,9 @@ the question text), and how to choose between the methods and tune them.
 - **Questions** (`cluster_questions`): the same cosine engine applied to the
   columns; returns a `pd.Series` (question → cluster id).
 - **Both at once** (`cluster_survey`): clusters both axes and orders the plots.
+- **Missing answers** (`nan_strategy`, see §2): `"fill"` (default) treats a gap
+  as neutral; `"ignore"` drops the affected respondent. Consistent across every
+  entry point above.
 
 ---
 
@@ -61,7 +64,34 @@ everyone answered neutral is a zero vector → −1).
 
 ---
 
-## 2. Choosing between cosine and UMAP: survey size
+## 2. Missing answers: `nan_strategy`
+
+Real surveys have unanswered questions. Every entry point (`cluster_questions`,
+`cluster_respondents_cosine`, `cluster_respondents_umap`, and the
+`cluster_respondents`/`cluster_survey` dispatchers) takes `nan_strategy` +
+`fill_value`:
+
+- `"fill"` (default): a missing answer is treated as neutral (`fill_value=0`)
+  and the respondent/question stays in the clustering.
+- `"ignore"`: any respondent with a missing answer among the selected columns
+  is dropped from that computation (`-1` for the cosine engines; NaN
+  coordinates/cluster id for UMAP).
+
+Both raise a warning when NaNs are found (a NaN can also mean `encode_likert`
+failed to map a raw response, not just a genuine skip).
+
+Why this needed fixing: a real "all-neutral" respondent is already a zero
+vector with no direction (§1, unclustered as −1). Silently zero-filling every
+NaN without saying so makes an incomplete respondent indistinguishable from a
+genuinely neutral one — and before this option existed, the two engines
+disagreed on the policy (respondents with any gap were dropped entirely in
+`cluster_respondents_cosine`, but silently zero-filled in `cluster_questions`
+and `cluster_respondents_umap`). `nan_strategy` makes the choice explicit and
+consistent everywhere.
+
+---
+
+## 3. Choosing between cosine and UMAP: survey size
 
 The two respondent engines have opposite sweet spots, so `cluster_respondents`
 picks by size (`_select_clustering_method`):
@@ -76,7 +106,7 @@ UMAP is unreliable with few respondents).
 
 ---
 
-## 3. Why cosine (and not correlation or Euclidean)?
+## 4. Why cosine (and not correlation or Euclidean)?
 
 Opinion data has a natural structure that cosine respects and the alternatives do
 not.
@@ -114,7 +144,7 @@ toolkit uses cosine on the encoded vectors.
 
 ---
 
-## 4. Choosing the distance threshold
+## 5. Choosing the distance threshold
 
 When you cut the dendrogram with `distance_threshold` (instead of `n_clusters`),
 two respondents stay in the same cluster while their cosine distance is below the
@@ -166,7 +196,7 @@ on a 10-question survey, roughly "disagree on 5+ questions".
 
 ---
 
-## 5. Clustering questions, and both axes at once (biclustering)
+## 6. Clustering questions, and both axes at once (biclustering)
 
 `cluster_questions` clusters the *columns* by cosine distance — a question
 everyone agrees with and a question everyone disagrees with point opposite ways
@@ -180,7 +210,7 @@ them up automatically.
 
 ---
 
-## 6. How to run
+## 7. How to run
 
 ```python
 import pandas_survey_toolkit.nlp  # registers the DataFrame methods (torch-free)
@@ -207,8 +237,8 @@ question_clusters = df.cluster_questions(columns=questions)
 
 # Both axes at once (biclustering) -> feeds the plots
 survey = df.cluster_survey(columns=questions)
-cluster_heatmap_plot(survey, x="respondent_cluster_id",
-                     y=[f"likert_encoded_{q}" for q in questions])
+cluster_heatmap_plot(survey, respondent_col="respondent_cluster_id",
+                     question_cols=[f"likert_encoded_{q}" for q in questions])
 survey_clustermap(df, columns=questions, label_col="respondent_id")
 ```
 

@@ -39,8 +39,8 @@ def heatmap_df():
 def test_returns_vconchat_chart(heatmap_df):
     chart = cluster_heatmap_plot(
         heatmap_df,
-        x="cluster_id",
-        y=["likert_encoded_Q1", "likert_encoded_Q2", "likert_encoded_Q3"],
+        respondent_col="cluster_id",
+        question_cols=["likert_encoded_Q1", "likert_encoded_Q2", "likert_encoded_Q3"],
     )
     assert isinstance(chart, alt.VConcatChart)
 
@@ -48,8 +48,8 @@ def test_returns_vconchat_chart(heatmap_df):
 def test_custom_max_width(heatmap_df):
     chart = cluster_heatmap_plot(
         heatmap_df,
-        x="cluster_id",
-        y=["likert_encoded_Q1", "likert_encoded_Q2"],
+        respondent_col="cluster_id",
+        question_cols=["likert_encoded_Q1", "likert_encoded_Q2"],
         max_width=40,
     )
     assert isinstance(chart, alt.VConcatChart)
@@ -93,7 +93,9 @@ def test_cluster_heatmap_plot_orders_from_cluster_survey(survey_text_df):
     df, questions = survey_text_df
     out = df.cluster_survey(columns=questions)
     encoded = [f"likert_encoded_{q}" for q in questions]
-    chart = cluster_heatmap_plot(out, x="respondent_cluster_id", y=encoded)
+    chart = cluster_heatmap_plot(
+        out, respondent_col="respondent_cluster_id", question_cols=encoded
+    )
     assert isinstance(chart, alt.VConcatChart)
 
 
@@ -124,7 +126,7 @@ def test_strongly_positive_cluster():
             "q1": [1] * 20 + [-1] * 20,
         }
     )
-    chart = cluster_heatmap_plot(df, x="cluster", y=["q1"])
+    chart = cluster_heatmap_plot(df, respondent_col="cluster", question_cols=["q1"])
     assert isinstance(chart, alt.VConcatChart)
 
 
@@ -136,7 +138,7 @@ def test_strongly_negative_cluster():
             "q1": [-1] * 20 + [1] * 20,
         }
     )
-    chart = cluster_heatmap_plot(df, x="cluster", y=["q1"])
+    chart = cluster_heatmap_plot(df, respondent_col="cluster", question_cols=["q1"])
     assert isinstance(chart, alt.VConcatChart)
 
 
@@ -160,7 +162,7 @@ def test_mixed_sentiment_cluster():
             + [0] * 8,
         }
     )
-    chart = cluster_heatmap_plot(df, x="cluster", y=["q1"])
+    chart = cluster_heatmap_plot(df, respondent_col="cluster", question_cols=["q1"])
     assert isinstance(chart, alt.VConcatChart)
 
 
@@ -173,7 +175,7 @@ def test_neutral_all_zero():
             "q1": [0] * 10,  # all neutral → pos=0.0, neg=0.0, neither > the other
         }
     )
-    chart = cluster_heatmap_plot(df, x="cluster", y=["q1"])
+    chart = cluster_heatmap_plot(df, respondent_col="cluster", question_cols=["q1"])
     assert isinstance(chart, alt.VConcatChart)
 
 
@@ -185,7 +187,7 @@ def test_single_cluster():
             "q1": [1, 1, 0, -1, 1, 0, 1, -1, 1, 0],
         }
     )
-    chart = cluster_heatmap_plot(df, x="cluster", y=["q1"])
+    chart = cluster_heatmap_plot(df, respondent_col="cluster", question_cols=["q1"])
     assert isinstance(chart, alt.VConcatChart)
 
 
@@ -193,8 +195,8 @@ def test_multiple_questions(heatmap_df):
     """Verify the chart works with multiple y columns."""
     chart = cluster_heatmap_plot(
         heatmap_df,
-        x="cluster_id",
-        y=["likert_encoded_Q1", "likert_encoded_Q2", "likert_encoded_Q3"],
+        respondent_col="cluster_id",
+        question_cols=["likert_encoded_Q1", "likert_encoded_Q2", "likert_encoded_Q3"],
     )
     assert isinstance(chart, alt.VConcatChart)
 

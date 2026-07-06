@@ -8,8 +8,8 @@ import pandas as pd
 
 def cluster_heatmap_plot(
     df: pd.DataFrame,
-    x: str,
-    y: List[str],
+    respondent_col: str,
+    question_cols: List[str],
     max_width: int = 75,
     question_order: Optional[List[str]] = None,
 ):
@@ -28,10 +28,14 @@ def cluster_heatmap_plot(
         The DataFrame containing the clustered data and encoded Likert responses.
         Should include a cluster column and encoded Likert columns.
 
-    x : str
-        The name of the column containing cluster IDs (e.g., 'question_cluster_id').
+    respondent_col : str
+        Name of the column to group rows by along the x-axis (e.g.,
+        'respondent_cluster_id'). This is usually a respondent *cluster* column,
+        collapsing many respondents into a handful of bars/columns - but it can
+        equally be the raw respondent ID/name column if you want a more granular,
+        one-column-per-respondent view (best for smaller surveys).
 
-    y : List[str]
+    question_cols : List[str]
         List of column names containing the encoded Likert responses.
         These should typically be columns with values -1, 0, 1 representing
         negative, neutral, and positive responses.
@@ -44,7 +48,7 @@ def cluster_heatmap_plot(
         bottom), typically the dendrogram order so clustered questions sit
         together. If omitted, it is read from ``df.attrs["question_order"]``
         (set by :func:`pandas_survey_toolkit.nlp.cluster_survey`); if that is
-        also absent the questions keep the order of ``y``.
+        also absent the questions keep the order of ``question_cols``.
 
     Returns
     -------
@@ -59,7 +63,8 @@ def cluster_heatmap_plot(
     positive and negative responses, with green representing positive sentiment,
     red representing negative sentiment, and varying shades for mixed responses.
 
-    The encoded Likert columns (y parameter) should contain values that are encoded as:
+    The encoded Likert columns (question_cols parameter) should contain values
+    that are encoded as:
     * 1 for positive responses
     * 0 for neutral responses
     * -1 for negative responses
@@ -68,53 +73,70 @@ def cluster_heatmap_plot(
     --------
     >>> # Assuming df has been processed with cluster_questions
     >>> likert_columns = [f"likert_encoded_{q}" for q in questions]
-    >>> heatmap = cluster_heatmap_plot(df, x="question_cluster_id", y=likert_columns)
+    >>> heatmap = cluster_heatmap_plot(
+    ...     df, respondent_col="question_cluster_id", question_cols=likert_columns
+    ... )
     >>> display(heatmap)
     """
+    missing = [c for c in [respondent_col, *question_cols] if c not in df.columns]
+    if missing:
+        raise KeyError(
+            f"cluster_heatmap_plot: column(s) not found in df: {missing}. "
+            "respondent_col and question_cols must name columns in df."
+        )
+
     # Order the question rows by their cluster so similar questions sit together.
     # Uses an explicit ``question_order`` if given, else the one stashed on
     # ``df.attrs["question_order"]`` by ``cluster_survey`` / ``cluster_questions``.
     if question_order is None:
         question_order = df.attrs.get("question_order")
     if question_order:
-        ordered = [c for c in question_order if c in y]
-        y = ordered + [c for c in y if c not in ordered]
+        ordered = [c for c in question_order if c in question_cols]
+        question_cols = ordered + [c for c in question_cols if c not in ordered]
 
     # Work on a plain copy with attrs cleared: heavy objects that helpers may
     # stash in ``df.attrs`` (linkages etc.) otherwise trip up pandas' attrs
     # propagation during the melt/concat below.
-    df = df[[x] + list(y)].copy()
+    df = df[[respondent_col] + list(question_cols)].copy()
     df.attrs = {}
 
     # Convert encoded responses to percent positive and percent negative.
     # Counting > 0 / < 0 (rather than == 1 / == -1) keeps the 3-point behaviour
     # identical while also supporting the 5-point (+/-2) encoding.
-    df_positive = df[y].apply(lambda col: (col > 0).astype(int))
-    df_negative = df[y].apply(lambda col: (col < 0).astype(int))
+    df_positive = df[question_cols].apply(lambda col: (col > 0).astype(int))
+    df_negative = df[question_cols].apply(lambda col: (col < 0).astype(int))
 
     # Calculate average percent positive and negative for each cluster and question
     heatmap_data_pos = (
-        df_positive.groupby(df[x])
+        df_positive.groupby(df[respondent_col])
         .mean()
         .reset_index()
-        .melt(id_vars=x, var_name="question", value_name="percent_positive")
+        .melt(
+            id_vars=respondent_col, var_name="question", value_name="percent_positive"
+        )
     )
     heatmap_data_neg = (
-        df_negative.groupby(df[x])
+        df_negative.groupby(df[respondent_col])
         .mean()
         .reset_index()
-        .melt(id_vars=x, var_name="question", value_name="percent_negative")
+        .melt(
+            id_vars=respondent_col, var_name="question", value_name="percent_negative"
+        )
     )
 
     # Merge positive and negative data
-    heatmap_data = pd.merge(heatmap_data_pos, heatmap_data_neg, on=[x, "question"])
+    heatmap_data = pd.merge(
+        heatmap_data_pos, heatmap_data_neg, on=[respondent_col, "question"]
+    )
     heatmap_data["percent_neutral"] = (
         1 - heatmap_data["percent_positive"] - heatmap_data["percent_negative"]
     )
 
     # Calculate overall positivity for each cluster
     cluster_positivity = (
-        heatmap_data.groupby(x)["percent_positive"].mean().sort_values(ascending=False)
+        heatmap_data.groupby(respondent_col)["percent_positive"]
+        .mean()
+        .sort_values(ascending=False)
     )
     cluster_order = cluster_positivity.index.tolist()
 
@@ -166,11 +188,11 @@ def cluster_heatmap_plot(
         alt.Chart(heatmap_data)
         .mark_rect()
         .encode(
-            x=alt.X(f"{x}:O", title="Cluster ID", sort=cluster_order),
+            x=alt.X(f"{respondent_col}:O", title="Cluster ID", sort=cluster_order),
             y=alt.Y("wrapped_question:O", title=None, sort=wrapped_labels),
             color=alt.Color("background_color:N", scale=None),
             tooltip=[
-                alt.Tooltip(f"{x}:O", title="Cluster ID"),
+                alt.Tooltip(f"{respondent_col}:O", title="Cluster ID"),
                 alt.Tooltip("question:O", title="Question"),
                 alt.Tooltip("percent_positive:Q", title="% Positive", format=".2%"),
                 alt.Tooltip("percent_negative:Q", title="% Negative", format=".2%"),
@@ -191,21 +213,21 @@ def cluster_heatmap_plot(
     )
 
     # Create bar chart for cluster counts
-    cluster_counts = df[x].value_counts().reset_index()
-    cluster_counts.columns = [x, "count"]
-    cluster_counts[x] = pd.Categorical(
-        cluster_counts[x], categories=cluster_order, ordered=True
+    cluster_counts = df[respondent_col].value_counts().reset_index()
+    cluster_counts.columns = [respondent_col, "count"]
+    cluster_counts[respondent_col] = pd.Categorical(
+        cluster_counts[respondent_col], categories=cluster_order, ordered=True
     )
-    cluster_counts = cluster_counts.sort_values(x)
+    cluster_counts = cluster_counts.sort_values(respondent_col)
 
     bar_chart = (
         alt.Chart(cluster_counts)
         .mark_bar()
         .encode(
-            x=alt.X(f"{x}:O", title="Cluster ID", sort=cluster_order),
+            x=alt.X(f"{respondent_col}:O", title="Cluster ID", sort=cluster_order),
             y=alt.Y("count:Q", title="Count"),
             tooltip=[
-                alt.Tooltip(f"{x}:O", title="Cluster ID"),
+                alt.Tooltip(f"{respondent_col}:O", title="Cluster ID"),
                 alt.Tooltip("count:Q", title="Count"),
             ],
         )

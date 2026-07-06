@@ -1,9 +1,12 @@
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
 
 # Import the functions to test
 from pandas_survey_toolkit.nlp import (
+    _check_encoded_range,
     fit_sentence_transformer,
     fit_spacy,
 )
@@ -466,3 +469,128 @@ def test_cluster_respondents_umap_small_sample_warns(small_survey_df):
     df, questions = small_survey_df
     with pytest.warns(UserWarning, match="exceeds the number of complete respondents"):
         df.cluster_respondents_umap(columns=questions)
+
+
+def test_cluster_questions_nan_default_fills(question_groups_df):
+    """Default nan_strategy="fill" treats a missing answer as neutral and warns."""
+    df = question_groups_df.copy()
+    df.loc[0, "Q1"] = np.nan
+
+    with pytest.warns(UserWarning, match="missing Likert answer"):
+        s = df.cluster_questions(
+            columns=["Q1", "Q2", "Q3", "Q4"], n_clusters=2, debug=False
+        )
+    assert isinstance(s, pd.Series)
+    assert set(s.index) == {"Q1", "Q2", "Q3", "Q4"}
+
+
+def test_cluster_questions_nan_ignore_drops_row(question_groups_df):
+    """nan_strategy="ignore" drops the affected respondent from the computation."""
+    df = question_groups_df.copy()
+    df.loc[0, "Q1"] = np.nan
+
+    with pytest.warns(UserWarning, match="excluded from clustering"):
+        s = df.cluster_questions(
+            columns=["Q1", "Q2", "Q3", "Q4"],
+            n_clusters=2,
+            debug=False,
+            nan_strategy="ignore",
+        )
+
+    baseline = question_groups_df.drop(index=0).cluster_questions(
+        columns=["Q1", "Q2", "Q3", "Q4"], n_clusters=2, debug=False
+    )
+    assert s.to_dict() == baseline.to_dict()
+
+
+def test_cluster_questions_invalid_nan_strategy(question_groups_df):
+    with pytest.raises(ValueError, match="nan_strategy"):
+        question_groups_df.cluster_questions(
+            columns=["Q1", "Q2", "Q3", "Q4"], nan_strategy="bogus", debug=False
+        )
+
+
+def test_cluster_respondents_cosine_nan_strategy_fill_vs_ignore(small_survey_df):
+    """ "ignore" excludes the incomplete respondent (-1); "fill" clusters it."""
+    df, questions = small_survey_df
+    df = df.copy()
+    df.loc[0, "Q1"] = np.nan
+
+    with pytest.warns(UserWarning, match="excluded from clustering"):
+        result_ignore = df.cluster_respondents_cosine(
+            columns=questions, n_clusters=2, debug=False, nan_strategy="ignore"
+        )
+    assert result_ignore.loc[0, "respondent_cluster_id"] == -1
+
+    with pytest.warns(UserWarning, match="treated as neutral"):
+        result_fill = df.cluster_respondents_cosine(
+            columns=questions, n_clusters=2, debug=False, nan_strategy="fill"
+        )
+    assert result_fill.loc[0, "respondent_cluster_id"] != -1
+
+
+def test_cluster_respondents_cosine_invalid_nan_strategy(small_survey_df):
+    df, questions = small_survey_df
+    with pytest.raises(ValueError, match="nan_strategy"):
+        df.cluster_respondents_cosine(
+            columns=questions, nan_strategy="bogus", debug=False
+        )
+
+
+def test_cluster_respondents_umap_nan_strategy_fill_vs_ignore(sample_df):
+    """ "ignore" leaves the incomplete respondent's outputs NaN; "fill" clusters it."""
+    df = sample_df.copy()
+    df.loc[0, "Q1"] = np.nan
+    questions = ["Q1", "Q2", "Q3", "Q4"]
+
+    result_ignore = df.cluster_respondents_umap(
+        columns=questions, nan_strategy="ignore"
+    )
+    assert pd.isna(result_ignore.loc[0, "respondent_cluster_id"])
+
+    result_fill = df.cluster_respondents_umap(columns=questions, nan_strategy="fill")
+    assert pd.notna(result_fill.loc[0, "respondent_cluster_id"])
+
+
+def test_cluster_respondents_umap_invalid_nan_strategy(sample_df):
+    with pytest.raises(ValueError, match="nan_strategy"):
+        sample_df.cluster_respondents_umap(
+            columns=["Q1", "Q2", "Q3", "Q4"], nan_strategy="bogus"
+        )
+
+
+def test_cosine_cluster_rejects_ward_linkage(small_survey_df):
+    """ward/centroid/median assume Euclidean distances; reject them for cosine."""
+    df, questions = small_survey_df
+    for bad_method in ("ward", "centroid", "median"):
+        with pytest.raises(ValueError, match="linkage_method must be one of"):
+            df.cluster_respondents_cosine(
+                columns=questions, linkage_method=bad_method, debug=False
+            )
+
+    for ok_method in ("single", "complete", "average", "weighted"):
+        result = df.cluster_respondents_cosine(
+            columns=questions, linkage_method=ok_method, n_clusters=2, debug=False
+        )
+        assert "respondent_cluster_id" in result.columns
+
+
+def test_check_encoded_range_warns_on_stray_values():
+    """A value outside the mapping's scale (besides NaN) should warn."""
+    df = pd.DataFrame({"likert_encoded_Q1": [-1, 0, 1, 5, np.nan]})
+    with pytest.warns(UserWarning, match="values outside the expected"):
+        _check_encoded_range(df, ["likert_encoded_Q1"], likert_mapping=None)
+
+
+def test_check_encoded_range_silent_for_expected_values():
+    """Values within the default (or custom) scale, plus NaN, should not warn."""
+    df = pd.DataFrame({"likert_encoded_Q1": [-1, 0, 1, np.nan]})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _check_encoded_range(df, ["likert_encoded_Q1"], likert_mapping=None)
+
+    custom_mapping = {"strongly agree": 2, "agree": 1, "disagree": -2}
+    df2 = pd.DataFrame({"likert_encoded_Q1": [-2, 1, 2, np.nan]})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _check_encoded_range(df2, ["likert_encoded_Q1"], likert_mapping=custom_mapping)
