@@ -35,6 +35,9 @@ def text_df():
 @pytest.fixture(scope="module")
 def spacy_df():
     """Run fit_spacy once per module — it loads a large model."""
+    pytest.importorskip(
+        "spacy", reason="needs the optional 'nlp' extra (pip install ...[nlp])"
+    )
     texts = [
         "The cats are running quickly through the park.",
         "Dogs were playing happily in the garden.",
@@ -516,6 +519,9 @@ class TestRefineKeywords:
 def cluster_comments_df():
     """Small but sufficient corpus for the full sentence-transformer + UMAP +
     HDBSCAN pipeline."""
+    pytest.importorskip(
+        "sentence_transformers", reason="needs the optional 'nlp' extra"
+    )
     positive = [
         "I absolutely love this product",
         "Excellent quality and great service",
@@ -580,6 +586,7 @@ def test_cluster_comments_custom_output_columns(cluster_comments_df):
 def extract_keywords_df():
     """Representative corpus for the preprocess → spacy → lemma → tfidf →
     refine pipeline."""
+    pytest.importorskip("spacy", reason="needs the optional 'nlp' extra")
     texts = [
         "Machine learning algorithms can process large datasets efficiently",
         "Deep learning models require substantial training data and computation",
@@ -606,6 +613,7 @@ def test_extract_keywords_produces_output(extract_keywords_df):
 
 
 def test_extract_keywords_with_nan():
+    pytest.importorskip("spacy", reason="needs the optional 'nlp' extra")
     texts = [
         "Machine learning is a powerful tool for data analysis",
         "Deep learning requires large amounts of training data",

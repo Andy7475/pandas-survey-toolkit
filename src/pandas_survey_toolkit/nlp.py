@@ -6,7 +6,6 @@ from typing import List, Tuple, Union
 import numpy as np
 import pandas as pd
 import pandas_flavor as pf
-import spacy
 from gensim.parsing.preprocessing import (
     remove_stopwords as gensim_remove_stopwords,
 )
@@ -15,12 +14,18 @@ from gensim.parsing.preprocessing import (
     strip_numeric,
     strip_tags,
 )
-from scipy.cluster.hierarchy import fcluster, linkage
-from scipy.spatial.distance import squareform
+from scipy.cluster.hierarchy import fcluster, leaves_list, linkage
+from scipy.spatial.distance import pdist
 from scipy.special import softmax
-from sentence_transformers import SentenceTransformer
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+# NOTE: the heavy free-text NLP libraries (spacy, sentence-transformers,
+# transformers, and their torch dependency) are the optional ``nlp`` extra. They
+# are imported lazily inside the functions that need them so that the Likert
+# clustering and text-preprocessing functions (encode_likert, cluster_questions,
+# cluster_respondents, cluster_survey, preprocess_text, clean_survey_columns,
+# ...) work with a torch-free install. gensim is lightweight and stays core.
+#     pip install pandas-survey-toolkit          # clustering + preprocessing
+#     pip install "pandas-survey-toolkit[nlp]"   # + free-text comment embeddings
 # Importing analytics registers the fit_umap / fit_cluster_hdbscan dataframe
 # methods that cluster_respondents relies on.
 from pandas_survey_toolkit import analytics  # noqa: F401
@@ -29,6 +34,15 @@ from pandas_survey_toolkit.utils import (
     combine_results,
     create_masked_df,
 )
+
+
+def _require_nlp_extra(feature):
+    """Raise a helpful error when the optional ``nlp`` extra is not installed."""
+    raise ImportError(
+        f"{feature} needs the optional 'nlp' extra (spacy, gensim, "
+        "sentence-transformers, transformers). Install it with:\n"
+        '    pip install "pandas-survey-toolkit[nlp]"'
+    )
 
 
 def _select_likert_columns(df, columns, pattern):
@@ -40,28 +54,347 @@ def _select_likert_columns(df, columns, pattern):
     return columns
 
 
+def _select_clustering_method(n_respondents, size_threshold=1000):
+    """Pick a respondent-clustering method from the survey size.
+
+    Cosine + hierarchical clustering builds an ``n x n`` distance matrix - great
+    for small/medium surveys but ``O(n^2)``; UMAP + HDBSCAN scales to very large
+    surveys (and needs many respondents to be reliable). Returns ``"cosine"`` at
+    or below ``size_threshold`` respondents, otherwise ``"umap"``.
+    """
+    return "cosine" if n_respondents <= size_threshold else "umap"
+
+
+def _check_for_nan(df, columns, nan_strategy="fill", fill_value=0):
+    """Handle missing Likert answers before clustering.
+
+    Always warns if any NaN is found among ``columns`` (regardless of
+    strategy): a NaN here may just mean an unanswered question, but it can also
+    mean :func:`encode_likert` silently failed to map a raw response, so the
+    caller should notice either way.
+
+    ``nan_strategy="fill"`` (default): missing answers are additionally treated
+    as neutral and filled with ``fill_value``. ``nan_strategy="ignore"``: rows
+    with any missing answer among ``columns`` are dropped entirely (reuses
+    :func:`pandas_survey_toolkit.utils.create_masked_df`).
+
+    Raises
+    ------
+    ValueError
+        If ``nan_strategy`` is not "fill" or "ignore".
+    """
+    if nan_strategy not in ("fill", "ignore"):
+        raise ValueError(
+            f"nan_strategy must be 'fill' or 'ignore', got {nan_strategy!r}."
+        )
+
+    n_missing = int(df[columns].isna().sum().sum())
+    if n_missing == 0:
+        return df
+
+    warnings.warn(
+        f"{n_missing} missing Likert answer(s) found (unanswered question, or "
+        "encode_likert failed to map a raw response - check its warnings too).",
+        stacklevel=3,
+    )
+
+    if nan_strategy == "ignore":
+        masked_df, mask = create_masked_df(df, columns)
+        warnings.warn(
+            f"{int((~mask).sum())} row(s) had at least one missing Likert answer "
+            "and were excluded from clustering (nan_strategy='ignore').",
+            stacklevel=3,
+        )
+        return masked_df
+
+    warnings.warn(
+        f"{n_missing} missing Likert answer(s) were treated as neutral "
+        f"(filled with {fill_value}); pass nan_strategy='ignore' to exclude "
+        "affected respondents instead.",
+        stacklevel=3,
+    )
+    df = df.copy()
+    # The encoded columns are object-dtype (int/pd.NA mix); convert to float64
+    # first (pd.to_numeric handles pd.NA, unlike a direct astype) so fillna
+    # doesn't trigger pandas' object-dtype downcasting warning.
+    df[columns] = df[columns].apply(pd.to_numeric).fillna(fill_value)
+    return df
+
+
+def _check_encoded_range(df, columns, likert_mapping):
+    """Warn if encoded Likert data contains values outside the expected scale.
+
+    A stray value that never went through :func:`encode_likert` (e.g. a raw,
+    un-encoded column mistakenly passed as ``columns``) would silently distort
+    cosine norms without erroring, so this is a cheap sanity check rather than
+    a hard invariant. The expected scale is ``{-1, 0, 1}`` for the default
+    mapping, or the set of values used by a ``custom_mapping``/``likert_mapping``.
+    """
+    valid_values = (
+        {-1, 0, 1} if likert_mapping is None else set(likert_mapping.values())
+    )
+    ok = df[columns].isin(valid_values) | df[columns].isna()
+    if not ok.all().all():
+        warnings.warn(
+            "Encoded Likert data contains values outside the expected "
+            f"{sorted(valid_values)} (besides NaN); check that 'columns' points "
+            "at already-encoded Likert data and not something else.",
+            stacklevel=3,
+        )
+
+
+def _cosine_cluster(
+    data,
+    *,
+    object_label,
+    linkage_method="average",
+    n_clusters=None,
+    distance_threshold=None,
+):
+    """Hierarchically cluster the *columns* of ``data`` by cosine distance.
+
+    Shared engine behind :func:`cluster_respondents_cosine` and
+    :func:`cluster_questions`. ``data`` is a numeric DataFrame whose columns are
+    the objects to cluster (respondents or questions) and whose rows are their
+    encoded answers. Callers are expected to have already resolved missing
+    values (see :func:`_check_for_nan`) - ``data`` should not contain NaN.
+
+    Cosine distance keeps the *direction* of a response vector, so respondents
+    who all agree and respondents who all disagree point opposite ways and
+    separate cleanly - unlike a correlation, which subtracts each respondent's
+    mean and cannot even be defined for a flat (zero-variance) "always agree"
+    response. The one case cosine cannot place is a **zero vector** (all-neutral /
+    all-zero answers): it has no direction, so it is left unclustered (``-1``).
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Numeric matrix; its columns are the response vectors to cluster.
+    object_label : str
+        Noun used in warnings ("respondent" or "question").
+    linkage_method : str, optional
+        scipy linkage method. Must be one of "single", "complete", "average" or
+        "weighted" - "ward"/"centroid"/"median" assume Euclidean distances and
+        produce meaningless merges on a cosine distance matrix.
+    n_clusters, distance_threshold
+        See :func:`cluster_respondents_cosine`. When neither is given, the
+        dendrogram is cut at cosine distance 1.0 (response directions that are
+        orthogonal or more get split into different clusters).
+
+    Returns
+    -------
+    labels : pandas.Series
+        Integer cluster id per column of ``data`` (index == ``data.columns``);
+        ``-1`` marks all-neutral columns that could not be clustered.
+    linkage_matrix : numpy.ndarray or None
+        scipy linkage over the clustered columns (ordered as ``clustered``), or
+        ``None`` if fewer than two columns could be clustered.
+    clustered : list
+        Clustered column names in original order (matches the linkage leaves).
+    order : list
+        Clustered column names in dendrogram-leaf order (adjacent == similar).
+
+    Notes
+    -----
+    With 3-point (-1/0/1) data, many respondents/questions can be exactly
+    identical, producing tied (zero) distances. Average linkage still clusters
+    them correctly, but the *leaf order* (``order``) among tied entries is not
+    guaranteed stable across scipy versions - fine unless you rely on it for
+    regression tests.
+    """
+    if n_clusters is not None and distance_threshold is not None:
+        raise ValueError("Provide at most one of 'n_clusters' or 'distance_threshold'.")
+
+    valid_linkage = {"single", "complete", "average", "weighted"}
+    if linkage_method not in valid_linkage:
+        raise ValueError(
+            f"linkage_method must be one of {sorted(valid_linkage)} for cosine "
+            f"distances, got {linkage_method!r}. 'ward'/'centroid'/'median' assume "
+            "Euclidean distances and produce meaningless results here."
+        )
+
+    labels = pd.Series(-1, index=data.columns, dtype=int)
+
+    # Each column is a response vector (callers guarantee no NaN reaches here).
+    vectors = data.to_numpy(dtype=float).T  # (n_objects, n_obs)
+    norms = np.linalg.norm(vectors, axis=1)
+    keep = norms > 0  # a flat all-neutral (zero) vector has no direction -> -1
+    clustered = list(data.columns[keep])
+    n_degenerate = len(data.columns) - len(clustered)
+    if n_degenerate:
+        warnings.warn(
+            f"{n_degenerate} {object_label}(s) gave an all-neutral (zero) response;"
+            " cosine distance is undefined for them so they are left unclustered"
+            " (cluster -1).",
+            stacklevel=3,
+        )
+
+    if len(clustered) < 2:
+        warnings.warn(
+            f"Fewer than two {object_label}s could be clustered; no clusters formed.",
+            stacklevel=3,
+        )
+        return labels, None, clustered, clustered
+
+    # Condensed pairwise cosine distances (1 - cosine similarity), in [0, 2].
+    condensed = np.clip(
+        np.nan_to_num(pdist(vectors[keep], metric="cosine"), nan=1.0), 0.0, 2.0
+    )
+    linkage_matrix = linkage(condensed, method=linkage_method)
+
+    if n_clusters is not None:
+        lab = fcluster(linkage_matrix, t=n_clusters, criterion="maxclust")
+    else:
+        threshold = 1.0 if distance_threshold is None else distance_threshold
+        lab = fcluster(linkage_matrix, t=threshold, criterion="distance")
+
+    labels.loc[clustered] = lab.astype(int)
+    order = [clustered[i] for i in leaves_list(linkage_matrix)]
+
+    return labels, linkage_matrix, clustered, order
+
+
 @pf.register_dataframe_method
 def cluster_respondents(
     df,
     columns=None,
     pattern=None,
     likert_mapping=None,
-    scale=3,
+    method="auto",
+    size_threshold=1000,
+    nan_strategy="fill",
+    fill_value=0,
+    output_columns=("respondent_cluster_id", "respondent_cluster_probability"),
+    debug=False,
+    **kwargs,
+):
+    """Cluster respondents, choosing the method by survey size.
+
+    Dispatches to one of two engines and forwards any extra keyword arguments to
+    the chosen one:
+
+    - ``method="cosine"`` -> :func:`cluster_respondents_cosine` (hierarchical
+      clustering on cosine distance; best for small/medium surveys, ``O(n^2)``).
+    - ``method="umap"`` -> :func:`cluster_respondents_umap` (UMAP + HDBSCAN;
+      scales to very large surveys, needs many respondents).
+    - ``method="auto"`` (default) -> :func:`_select_clustering_method` picks
+      cosine at or below ``size_threshold`` respondents, otherwise umap.
+
+    An explicit choice that is a poor fit for the survey size emits a warning.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    columns : list, optional
+        Question column names to use. If None, ``pattern`` is used.
+    pattern : str, optional
+        Regex pattern to match column names. Used if ``columns`` is None.
+    likert_mapping : dict, optional
+        Custom mapping for Likert responses (see :func:`encode_likert`).
+    method : {"auto", "cosine", "umap"}, optional
+        Which clustering engine to use. Default "auto".
+    size_threshold : int, optional
+        Respondent count above which "auto" switches to UMAP. Default 1000.
+    nan_strategy : {"fill", "ignore"}, optional
+        How to handle missing Likert answers, forwarded to whichever engine is
+        chosen. "fill" (default) treats missing answers as neutral (see
+        ``fill_value``); "ignore" drops respondents with any missing answer.
+        See :func:`cluster_respondents_cosine` / :func:`cluster_respondents_umap`.
+    fill_value : float, optional
+        Value used for missing answers when ``nan_strategy="fill"``. Default 0.
+    output_columns : tuple, optional
+        (cluster id, cluster probability) column names. The cosine method only
+        writes the cluster-id column. Default
+        ("respondent_cluster_id", "respondent_cluster_probability").
+    debug : bool, optional
+        Forwarded to :func:`encode_likert`. Default False.
+    **kwargs
+        Forwarded to the chosen method (e.g. ``n_clusters`` /
+        ``distance_threshold`` for cosine; ``umap_n_neighbors`` etc. for umap).
+
+    Returns
+    -------
+    pandas.DataFrame
+        With a ``respondent_cluster_id`` column (and, for umap, a probability
+        column and UMAP coordinates).
+
+    Raises
+    ------
+    ValueError
+        For an unknown ``method`` or if neither 'columns' nor 'pattern' is given.
+    """
+    if method not in ("auto", "cosine", "umap"):
+        raise ValueError(f"method must be 'auto', 'cosine' or 'umap', got {method!r}.")
+
+    columns = _select_likert_columns(df, columns, pattern)
+    # With nan_strategy="fill" every respondent ends up clustered, so size
+    # selection should count all of them; "ignore" still drops incomplete ones.
+    if nan_strategy == "fill":
+        n_respondents = int(len(df))
+    else:
+        n_respondents = int(df[columns].notna().all(axis=1).sum())
+
+    chosen = method
+    if method == "auto":
+        chosen = _select_clustering_method(n_respondents, size_threshold=size_threshold)
+    elif method == "cosine" and n_respondents > size_threshold:
+        warnings.warn(
+            f"method='cosine' builds a {n_respondents}x{n_respondents} distance "
+            "matrix, which is expensive at this size; consider 'umap' or 'auto'.",
+            stacklevel=2,
+        )
+    elif method == "umap" and n_respondents < 50:
+        warnings.warn(
+            f"method='umap' is unreliable with only {n_respondents} respondents; "
+            "consider 'cosine' or 'auto'.",
+            stacklevel=2,
+        )
+
+    if chosen == "cosine":
+        return df.cluster_respondents_cosine(
+            columns=columns,
+            likert_mapping=likert_mapping,
+            nan_strategy=nan_strategy,
+            fill_value=fill_value,
+            output_column=output_columns[0],
+            debug=debug,
+            **kwargs,
+        )
+    return df.cluster_respondents_umap(
+        columns=columns,
+        likert_mapping=likert_mapping,
+        nan_strategy=nan_strategy,
+        fill_value=fill_value,
+        output_columns=output_columns,
+        debug=debug,
+        **kwargs,
+    )
+
+
+@pf.register_dataframe_method
+def cluster_respondents_umap(
+    df,
+    columns=None,
+    pattern=None,
+    likert_mapping=None,
     umap_n_neighbors=15,
     umap_min_dist=0.1,
     hdbscan_min_cluster_size=20,
     hdbscan_min_samples=None,
     cluster_selection_epsilon=0.4,
+    nan_strategy="fill",
+    fill_value=0,
     output_columns=("respondent_cluster_id", "respondent_cluster_probability"),
     debug=False,
 ):
-    """Cluster *respondents* by their Likert response patterns (UMAP + HDBSCAN).
+    """Cluster respondents by their Likert responses with UMAP + HDBSCAN.
 
-    Each respondent (row) is turned into a vector of encoded answers and embedded
-    with UMAP (cosine metric), then grouped with HDBSCAN. Because UMAP embeds one
-    point *per respondent*, this method needs a reasonable number of respondents
-    to work well. When respondents are few (roughly, fewer than the number of
-    questions) prefer :func:`cluster_respondents_correlation`. See
+    Each respondent (row) becomes a vector of encoded answers, embedded with UMAP
+    (cosine metric) and grouped with HDBSCAN. UMAP embeds one point *per
+    respondent*, so this needs a reasonable number of respondents; for small
+    surveys prefer :func:`cluster_respondents_cosine`.
+    :func:`cluster_respondents` chooses between the two automatically. See
     ``docs/source/clustering_methods_comparison.md`` for the maths.
 
     Parameters
@@ -69,14 +402,11 @@ def cluster_respondents(
     df : pandas.DataFrame
         The input DataFrame.
     columns : list, optional
-        List of question column names to use. If None, ``pattern`` is used.
+        Question column names to use. If None, ``pattern`` is used.
     pattern : str, optional
         Regex pattern to match column names. Used if ``columns`` is None.
     likert_mapping : dict, optional
-        Custom mapping for Likert scale responses. If None, the built-in
-        ``scale``-point mapping is used.
-    scale : int, optional
-        Encoding scale passed to :func:`encode_likert` (3 or 5). Default is 3.
+        Custom mapping for Likert responses (see :func:`encode_likert`).
     umap_n_neighbors : int, optional
         The size of local neighborhood for UMAP. Default is 15.
     umap_min_dist : float, optional
@@ -89,35 +419,59 @@ def cluster_respondents(
     cluster_selection_epsilon : float, optional
         A distance threshold. Clusters below this value will be merged. Default
         is 0.4. Higher epsilon means fewer, larger clusters.
+    nan_strategy : {"fill", "ignore"}, optional
+        How to handle missing Likert answers. "fill" (default) treats missing
+        answers as neutral, filled with ``fill_value``, so every respondent gets
+        embedded and clustered. "ignore" drops respondents with any missing
+        answer before embedding - they end up with NaN coordinates/cluster id,
+        matching this function's behavior prior to the ``nan_strategy`` option.
+    fill_value : float, optional
+        Value used for missing answers when ``nan_strategy="fill"``. Default 0.
     output_columns : tuple, optional
         Names for the (cluster id, cluster probability) output columns. Default
         is ("respondent_cluster_id", "respondent_cluster_probability").
+    debug : bool, optional
+        Forwarded to :func:`encode_likert`. Default False.
 
     Returns
     -------
     pandas.DataFrame
-        The input DataFrame with additional columns for encoded Likert responses,
-        UMAP coordinates, and cluster IDs.
+        The input DataFrame with encoded Likert responses, UMAP coordinates, and
+        cluster IDs.
 
     Raises
     ------
     ValueError
-        If neither 'columns' nor 'pattern' is provided.
+        If neither 'columns' nor 'pattern' is provided, or ``nan_strategy`` is
+        invalid.
     """
     columns = _select_likert_columns(df, columns, pattern)
 
     # Encode Likert scales
-    df = df.encode_likert(
-        columns, custom_mapping=likert_mapping, scale=scale, debug=debug
-    )
+    df = df.encode_likert(columns, custom_mapping=likert_mapping, debug=debug)
     encoded_columns = [f"likert_encoded_{col}" for col in columns]
+
+    if nan_strategy == "fill":
+        # Shape-preserving: safe to swap in directly so fit_umap sees no NaN
+        # left to mask (every respondent gets embedded and clustered).
+        df = _check_for_nan(
+            df, encoded_columns, nan_strategy=nan_strategy, fill_value=fill_value
+        )
+    else:
+        # "ignore": just raise the warnings here. fit_umap/fit_cluster_hdbscan
+        # already exclude incomplete respondents via create_masked_df and
+        # preserve the full row count (NaN result for excluded rows), so there
+        # is nothing to swap into ``df``.
+        _check_for_nan(
+            df, encoded_columns, nan_strategy=nan_strategy, fill_value=fill_value
+        )
 
     # Guard against surveys that are too small for density-based clustering.
     # HDBSCAN raises if min_samples exceeds the number of points, and cannot
     # form a cluster of ``min_cluster_size`` if there are fewer respondents than
     # that. Shrink the parameters (with a warning) so the call degrades to a
-    # trivial result instead of erroring, and point users at the correlation
-    # method which is designed for this regime.
+    # trivial result instead of erroring, and point users at the cosine method
+    # which is designed for this regime.
     n_respondents = int(df[encoded_columns].notna().all(axis=1).sum())
     effective_min_cluster_size = hdbscan_min_cluster_size
     effective_min_samples = hdbscan_min_samples
@@ -129,8 +483,9 @@ def cluster_respondents(
             f"hdbscan_min_cluster_size ({hdbscan_min_cluster_size}) exceeds the "
             f"number of complete respondents ({n_respondents}); reducing it to "
             f"{effective_min_cluster_size}. UMAP+HDBSCAN is unreliable with so few "
-            "respondents - consider cluster_respondents_correlation, which is "
-            "designed for surveys with few respondents and many questions."
+            "respondents - consider cluster_respondents_cosine, which is designed "
+            "for surveys with few respondents and many questions.",
+            stacklevel=2,
         )
 
     # Apply UMAP
@@ -155,51 +510,156 @@ def cluster_respondents(
 
 
 @pf.register_dataframe_method
-def cluster_questions(df, **kwargs):
-    """Deprecated alias for :func:`cluster_respondents`.
-
-    Despite its name this always clustered *respondents* (one UMAP point per
-    row), not questions. It is retained for backwards compatibility and emits a
-    ``DeprecationWarning``; the output columns keep their historical names
-    (``question_cluster_id`` / ``question_cluster_probability``). New code should
-    call :func:`cluster_respondents` or :func:`cluster_respondents_correlation`.
-    """
-    warnings.warn(
-        "cluster_questions is deprecated and clusters respondents, not questions."
-        " Use cluster_respondents (UMAP+HDBSCAN) or"
-        " cluster_respondents_correlation (better for few respondents) instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return df.cluster_respondents(
-        output_columns=("question_cluster_id", "question_cluster_probability"),
-        **kwargs,
-    )
-
-
-@pf.register_dataframe_method
-def cluster_respondents_correlation(
+def cluster_questions(
     df,
     columns=None,
     pattern=None,
     likert_mapping=None,
-    scale=3,
-    corr_method="pearson",
     linkage_method="average",
-    distance="signed",
     n_clusters=None,
     distance_threshold=None,
+    nan_strategy="fill",
+    fill_value=0,
+    debug=False,
+):
+    """Cluster *questions* by how respondents co-answer them.
+
+    This groups questions that get similar response patterns across respondents,
+    purely from the data (no NLP on the question text). It is the mirror of
+    :func:`cluster_respondents_cosine`: instead of comparing respondents across
+    the questions, it compares the questions across the respondents, using
+    **cosine distance** and hierarchical clustering. Cosine keeps the direction
+    of each question's response vector, so a question everyone agrees with and a
+    question everyone disagrees with point opposite ways and separate cleanly.
+
+    .. note::
+        This is a breaking change from v1.x, where ``cluster_questions`` was a
+        deprecated alias that actually clustered *respondents*. It now clusters
+        questions. Use :func:`cluster_respondents` to cluster respondents.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    columns : list, optional
+        Question column names to cluster. If None, ``pattern`` is used.
+    pattern : str, optional
+        Regex pattern to match column names. Used if ``columns`` is None.
+    likert_mapping : dict, optional
+        Custom mapping for Likert responses (see :func:`encode_likert`).
+    linkage_method : str, optional
+        scipy linkage method ("average", "complete", ...). Default "average".
+    n_clusters : int, optional
+        Cut the dendrogram to exactly this many clusters. Mutually exclusive
+        with ``distance_threshold``.
+    distance_threshold : float, optional
+        Cosine cophenetic-distance cut (defaults to 1.0 when neither is given,
+        i.e. split questions whose response directions are orthogonal or more).
+    nan_strategy : {"fill", "ignore"}, optional
+        How to handle missing Likert answers. "fill" (default) treats a missing
+        answer as neutral, filled with ``fill_value``, so every respondent's
+        answer still contributes to each question's response vector. "ignore"
+        drops any respondent with a missing answer among ``columns`` before
+        clustering questions.
+    fill_value : float, optional
+        Value used for missing answers when ``nan_strategy="fill"``. Default 0.
+    debug : bool, optional
+        Forwarded to :func:`encode_likert`. Default False.
+
+    Returns
+    -------
+    pandas.Series
+        A Series **indexed by the original question column names**, giving an
+        integer cluster id per question (``-1`` for a question everyone answered
+        *neutral*, a zero vector with no direction). The scipy linkage and the
+        dendrogram-leaf orderings are attached on ``.attrs``:
+        ``.attrs["linkage"]``, ``.attrs["question_order"]`` (original names,
+        similar questions adjacent) and ``.attrs["encoded_order"]`` (the
+        ``likert_encoded_*`` column names in the same order).
+
+    Examples
+    --------
+    Use it standalone and save the mapping for other analysis::
+
+        question_clusters = df.cluster_questions(columns=likert_cols)
+        # -> pandas.Series indexed by question name, values are cluster ids
+        question_clusters.to_csv("question_clusters.csv")
+
+        # questions grouped, in dendrogram order:
+        for q in question_clusters.attrs["question_order"]:
+            print(question_clusters[q], q)
+
+    Raises
+    ------
+    ValueError
+        If neither 'columns' nor 'pattern' is given, if both ``n_clusters`` and
+        ``distance_threshold`` are given, or if ``nan_strategy`` is invalid.
+    """
+    if n_clusters is not None and distance_threshold is not None:
+        raise ValueError("Provide at most one of 'n_clusters' or 'distance_threshold'.")
+
+    columns = _select_likert_columns(df, columns, pattern)
+    encoded = df.encode_likert(columns, custom_mapping=likert_mapping, debug=debug)
+    encoded_columns = [f"likert_encoded_{col}" for col in columns]
+
+    _check_encoded_range(encoded, encoded_columns, likert_mapping)
+    checked = _check_for_nan(
+        encoded, encoded_columns, nan_strategy=nan_strategy, fill_value=fill_value
+    )
+
+    # rows = respondents, columns = questions -> clustering the columns.
+    responses = checked[encoded_columns].astype(float)
+
+    labels, linkage_matrix, _clustered, order = _cosine_cluster(
+        responses,
+        object_label="question",
+        linkage_method=linkage_method,
+        n_clusters=n_clusters,
+        distance_threshold=distance_threshold,
+    )
+
+    # Report against the original (un-prefixed) question names.
+    enc_to_orig = dict(zip(encoded_columns, columns))
+    result = pd.Series(
+        labels.to_numpy(),
+        index=[enc_to_orig[c] for c in labels.index],
+        name="question_cluster_id",
+        dtype=int,
+    )
+    result.attrs["linkage"] = linkage_matrix
+    result.attrs["encoded_order"] = order
+    result.attrs["question_order"] = [enc_to_orig[c] for c in order]
+    result.attrs["encoded_columns"] = encoded_columns
+    return result
+
+
+@pf.register_dataframe_method
+def cluster_respondents_cosine(
+    df,
+    columns=None,
+    pattern=None,
+    likert_mapping=None,
+    linkage_method="average",
+    n_clusters=None,
+    distance_threshold=None,
+    nan_strategy="fill",
+    fill_value=0,
     output_column="respondent_cluster_id",
     debug=False,
 ):
-    """Cluster respondents using correlation + hierarchical (dendrogram) clustering.
+    """Cluster respondents using cosine distance + hierarchical clustering.
 
-    This is the recommended approach when there are **few respondents relative to
-    the number of questions**. Rather than embedding respondents as points (which
-    UMAP/HDBSCAN need many of), it correlates every pair of respondents *across
-    the questions* and runs agglomerative clustering on the resulting distance
-    matrix. Each correlation is estimated over all the questions, so the estimates
-    stay stable even when respondents are scarce. See
+    The recommended approach for **small/medium surveys**. Each respondent is a
+    vector of their encoded answers; respondents are grouped by the **cosine
+    distance** between those vectors and agglomerative (dendrogram) clustering.
+
+    Cosine compares the *direction* of the answer vectors, which is exactly what
+    you want for opinion data: respondents who agree with everything point one
+    way and respondents who disagree with everything point the opposite way, so
+    they separate cleanly - whereas a correlation subtracts each respondent's
+    mean and cannot even be defined for a flat "always agree" response. A
+    respondent who answers **everything neutral** is a zero vector with no
+    direction and is left unclustered (``-1``). See
     ``docs/source/clustering_methods_comparison.md`` for the maths.
 
     Parameters
@@ -211,155 +671,283 @@ def cluster_respondents_correlation(
     pattern : str, optional
         Regex pattern to match column names. Used if ``columns`` is None.
     likert_mapping : dict, optional
-        Custom mapping for Likert scale responses. If None, the built-in
-        ``scale``-point mapping is used.
-    scale : int, optional
-        Encoding scale passed to :func:`encode_likert` (3 or 5). Default is 3.
-        Use 5 if the intensity of agreement should influence the grouping.
-    corr_method : str, optional
-        Correlation method passed to :meth:`pandas.DataFrame.corr`
-        ("pearson", "spearman" or "kendall"). Default is "pearson", which
-        centres each respondent and therefore groups by response *shape* rather
-        than overall positivity (acquiescence bias).
+        Custom mapping for Likert responses (see :func:`encode_likert`).
     linkage_method : str, optional
         Linkage method for :func:`scipy.cluster.hierarchy.linkage`
         ("average", "complete", "single", ...). Default is "average".
-        (Ward is not offered because it requires raw Euclidean coordinates, not a
-        precomputed correlation-distance matrix.)
-    distance : str, optional
-        How to turn a correlation ``r`` into a distance. "signed" -> ``1 - r``
-        (opposite responders are far apart; the default), or "absolute" ->
-        ``1 - |r|`` (group by strength of association regardless of sign).
-
-        Use "signed" to find opinion *camps* (the usual segmentation goal;
-        "absolute" would wrongly merge opposite camps). Reach for "absolute" only
-        when you want to group by the *axis* of (dis)agreement rather than the
-        side: e.g. a two-stage analysis that first isolates the polarised bloc
-        (both camps) from respondents who are off that axis, then splits it with
-        "signed"; matched/adversarial dyads where a perfect opposite is a strong
-        relationship (buyer/seller, prosecution/defence); or as a safety net
-        against reverse-keyed items that were not reverse-scored. See the
-        "when does absolute make sense" note in
-        ``docs/source/clustering_methods_comparison.md``.
     n_clusters : int, optional
         If given, cut the dendrogram to produce exactly this many clusters
         (``criterion="maxclust"``). Mutually exclusive with ``distance_threshold``.
     distance_threshold : float, optional
-        If given, cut the dendrogram at this cophenetic distance
-        (``criterion="distance"``): respondents merge into the same cluster while
-        their distance stays below the threshold. Higher threshold -> fewer,
-        larger clusters (more disagreement tolerated); lower -> more, smaller
-        clusters. If neither ``n_clusters`` nor ``distance_threshold`` is
-        provided, a threshold of 1.0 is used (which splits positively- from
-        non-positively-correlated respondents; for a 10-question survey that is
-        roughly "disagree on 5+ questions").
+        If given, cut the dendrogram at this cosine cophenetic distance
+        (``criterion="distance"``): respondents merge while their distance stays
+        below the threshold. Higher -> fewer, larger clusters (more disagreement
+        tolerated); lower -> more, smaller clusters. If neither ``n_clusters`` nor
+        ``distance_threshold`` is provided, a threshold of 1.0 is used (cosine
+        distance 1 = orthogonal answer directions; for a 10-question +/-1 survey
+        that is roughly "disagree on 5+ questions").
 
-        Rule of thumb (``distance="signed"``, +/-1 agree/disagree encoding): two
-        respondents sit about ``2 * d / Q`` apart, where ``d`` is the number of
-        questions they answer oppositely and ``Q`` is the number of questions.
-        So each disagreement moves them ~``2/Q`` further apart (0.2 per
-        disagreement for Q=10). To split respondents who disagree on ``k`` or
-        more questions, set the threshold roughly halfway between the ``k-1`` and
-        ``k`` steps: ``threshold ~= (2*k - 1) / Q`` (e.g. Q=10: ~0.3 to split at
-        2+ disagreements, ~0.5 at 3+, ~0.7 at 4+). The default Pearson distance
-        runs a touch lower than ``2 d / Q``, so lean to the low side if you must
-        guarantee the split. Neutrals and the +/-2 scale change the per-question
-        weight (a neutral-vs-agree question is a half step; a strongly-vs-
-        strongly opposition on the 5-point scale counts double), so the count
-        interpretation is cleanest for pure +/-1 data. See
-        ``docs/source/clustering_methods_comparison.md`` for the derivation.
+        Rule of thumb (+/-1 agree/disagree encoding, no neutrals): two respondents
+        sit exactly ``2 * d / Q`` apart in cosine distance, where ``d`` is the
+        number of questions they answer oppositely and ``Q`` is the number of
+        questions. So each disagreement moves them ``2/Q`` further apart (0.2 per
+        disagreement for Q=10). To split respondents who disagree on ``k`` or more
+        questions, set ``threshold ~= (2*k - 1) / Q`` (e.g. Q=10: ~0.3 to split at
+        2+ disagreements, ~0.5 at 3+, ~0.7 at 4+). Neutral answers shrink a
+        vector rather than flip it, so they dilute (rather than reverse) the
+        distance. See ``docs/source/clustering_methods_comparison.md``.
+    nan_strategy : {"fill", "ignore"}, optional
+        How to handle missing Likert answers. "fill" (default) treats a missing
+        answer as neutral, filled with ``fill_value``, so every respondent gets
+        clustered. "ignore" excludes any respondent with a missing answer
+        (they receive ``-1``, matching this function's behavior prior to the
+        ``nan_strategy`` option).
+    fill_value : float, optional
+        Value used for missing answers when ``nan_strategy="fill"``. Default 0.
     output_column : str, optional
         Name of the cluster-id column to add. Default is "respondent_cluster_id".
+    debug : bool, optional
+        Forwarded to :func:`encode_likert`. Default False.
 
     Returns
     -------
     pandas.DataFrame
         The input DataFrame with the encoded Likert columns and an integer
-        cluster-id column. Respondents that could not be clustered (NaN answers,
-        or constant answers giving undefined correlation) receive ``-1``. The
-        scipy linkage matrix and the clustered respondent index are stored on
-        ``df.attrs["respondent_linkage"]`` / ``df.attrs["respondent_linkage_index"]``
-        so a dendrogram can be drawn (see
+        cluster-id column. An all-neutral (zero) response, or (with
+        ``nan_strategy="ignore"``) a respondent excluded for a missing answer,
+        receives ``-1``. The scipy linkage matrix and the clustered respondent
+        index are stored on ``df.attrs["respondent_linkage"]`` /
+        ``df.attrs["respondent_linkage_index"]`` so a dendrogram can be drawn (see
         :func:`pandas_survey_toolkit.vis.plot_respondent_dendrogram`).
 
     Raises
     ------
     ValueError
         If neither 'columns' nor 'pattern' is provided, if both ``n_clusters``
-        and ``distance_threshold`` are given, or for an unknown ``distance``.
+        and ``distance_threshold`` are given, or if ``nan_strategy`` is invalid.
 
     Notes
     -----
     This method builds an ``n_respondents x n_respondents`` distance matrix, so
     it is meant for small-to-medium surveys. With many thousands of respondents
-    prefer :func:`cluster_respondents` (UMAP + HDBSCAN), which scales far better.
+    prefer :func:`cluster_respondents_umap`, which scales far better;
+    :func:`cluster_respondents` chooses between them automatically.
     """
     if n_clusters is not None and distance_threshold is not None:
         raise ValueError("Provide at most one of 'n_clusters' or 'distance_threshold'.")
-    if distance not in ("signed", "absolute"):
-        raise ValueError(f"distance must be 'signed' or 'absolute', got {distance!r}.")
 
     columns = _select_likert_columns(df, columns, pattern)
 
-    df = df.encode_likert(
-        columns, custom_mapping=likert_mapping, scale=scale, debug=debug
-    )
+    df = df.encode_likert(columns, custom_mapping=likert_mapping, debug=debug)
     encoded_columns = [f"likert_encoded_{col}" for col in columns]
 
     df = df.copy()
     df[output_column] = -1
 
-    # Keep only respondents with a complete set of answers.
-    masked_df, mask = create_masked_df(df, encoded_columns)
+    _check_encoded_range(df, encoded_columns, likert_mapping)
+    masked_df = _check_for_nan(
+        df, encoded_columns, nan_strategy=nan_strategy, fill_value=fill_value
+    )
     responses = masked_df[encoded_columns].astype(float)
 
-    # Respondents with no variation across questions have an undefined
-    # correlation with everyone; exclude them (they stay labelled -1).
-    varying = responses.std(axis=1) > 0
-    if not varying.all():
-        warnings.warn(
-            f"{int((~varying).sum())} respondent(s) gave the same answer to every "
-            "question; their correlation is undefined so they are left unclustered "
-            "(cluster -1)."
-        )
-    responses = responses[varying]
+    # Cluster the respondents: transpose so each respondent is a column, then
+    # cosine distances compare their answer directions across the questions.
+    labels, linkage_matrix, clustered, _order = _cosine_cluster(
+        responses.T,
+        object_label="respondent",
+        linkage_method=linkage_method,
+        n_clusters=n_clusters,
+        distance_threshold=distance_threshold,
+    )
 
-    if len(responses) < 2:
-        warnings.warn(
-            "Fewer than two respondents can be correlated; no clusters formed."
-        )
-        return df
+    df.loc[labels.index, output_column] = labels.to_numpy()
 
-    # Correlate respondents against each other across the questions.
-    corr = responses.T.corr(method=corr_method)
-
-    if distance == "signed":
-        dist = 1.0 - corr
-    else:  # "absolute"
-        dist = 1.0 - corr.abs()
-
-    # Guard against tiny floating-point artefacts before condensing.
-    dist_values = dist.to_numpy()
-    dist_values = (dist_values + dist_values.T) / 2.0
-    np.fill_diagonal(dist_values, 0.0)
-    dist_values = np.clip(dist_values, 0.0, None)
-
-    condensed = squareform(dist_values, checks=False)
-    linkage_matrix = linkage(condensed, method=linkage_method)
-
-    if n_clusters is not None:
-        labels = fcluster(linkage_matrix, t=n_clusters, criterion="maxclust")
-    else:
-        threshold = 1.0 if distance_threshold is None else distance_threshold
-        labels = fcluster(linkage_matrix, t=threshold, criterion="distance")
-
-    df.loc[responses.index, output_column] = labels.astype(int)
-
-    # Expose the linkage so callers can draw a dendrogram.
-    df.attrs["respondent_linkage"] = linkage_matrix
-    df.attrs["respondent_linkage_index"] = list(responses.index)
+    # Expose the linkage so callers can draw a dendrogram. Store it as a plain
+    # nested list (not a numpy array): non-scalar objects in ``df.attrs`` break
+    # pandas' attrs propagation during melt/concat/groupby.
+    df.attrs["respondent_linkage"] = (
+        linkage_matrix.tolist() if linkage_matrix is not None else None
+    )
+    df.attrs["respondent_linkage_index"] = clustered
 
     return df
+
+
+@pf.register_dataframe_method
+def cluster_survey(
+    df,
+    columns=None,
+    pattern=None,
+    likert_mapping=None,
+    respondent_method="auto",
+    linkage_method="average",
+    respondent_n_clusters=None,
+    question_n_clusters=None,
+    distance_threshold=None,
+    size_threshold=1000,
+    nan_strategy="fill",
+    fill_value=0,
+    debug=False,
+    **umap_kwargs,
+):
+    """Cluster a survey on both axes at once (respondents *and* questions).
+
+    Convenience wrapper that encodes the Likert columns, clusters the
+    respondents and the questions, and stashes everything the plotting helpers
+    need to order both axes. Pass the returned DataFrame straight to
+    :func:`pandas_survey_toolkit.vis.cluster_heatmap_plot` (Altair, collapses
+    respondents into clusters - good for many respondents / few clusters) or
+    :func:`pandas_survey_toolkit.vis.survey_clustermap` (seaborn, per-respondent
+    biclustered map - good for few respondents) and both axes come out in a
+    sensible, cluster-grouped order.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    columns : list, optional
+        Question columns. If None, ``pattern`` is used.
+    pattern : str, optional
+        Regex to match question columns (used if ``columns`` is None).
+    likert_mapping : dict, optional
+        Passed to :func:`encode_likert`.
+    respondent_method : {"auto", "cosine", "umap"}, optional
+        How to cluster respondents (same choice as :func:`cluster_respondents`).
+        "auto" (default) uses cosine for small surveys (<= ``size_threshold``
+        respondents) and UMAP+HDBSCAN above that. An explicit choice that is a
+        poor fit for the data size emits a warning (cosine is O(n^2); UMAP needs
+        many respondents).
+    linkage_method : str, optional
+        scipy linkage method for the cosine clustering of both axes. Default
+        "average".
+    respondent_n_clusters, question_n_clusters : int, optional
+        Cut each dendrogram to a fixed number of clusters (per axis).
+    distance_threshold : float, optional
+        Shared cosine cophenetic-distance cut, applied to whichever axis does not
+        have an explicit ``*_n_clusters``.
+    size_threshold : int, optional
+        Respondent count above which "auto" switches to UMAP. Default 1000.
+    nan_strategy : {"fill", "ignore"}, optional
+        How to handle missing Likert answers, forwarded to both the respondent
+        and question clustering steps. "fill" (default) treats missing answers
+        as neutral (see ``fill_value``); "ignore" drops respondents with any
+        missing answer instead. See :func:`cluster_respondents_cosine`.
+    fill_value : float, optional
+        Value used for missing answers when ``nan_strategy="fill"``. Default 0.
+    debug : bool, optional
+        Forwarded to :func:`encode_likert`. Default False.
+    **umap_kwargs
+        Extra arguments forwarded to :func:`cluster_respondents_umap` when the
+        UMAP path is used.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A copy of ``df`` with the encoded Likert columns and an integer
+        ``respondent_cluster_id`` column. Question clustering and orderings are
+        attached on ``df.attrs`` for the plotting helpers (all plain
+        list/dict/scalar objects, so ``out`` stays safe for further pandas ops):
+
+        - ``question_cluster_id`` : dict (question -> cluster id). For the full
+          Series with linkage attached, call :func:`cluster_questions` directly.
+        - ``question_order`` : encoded question columns in dendrogram order
+        - ``question_linkage`` : scipy linkage over the questions (nested list)
+        - ``respondent_linkage`` / ``respondent_linkage_index`` : present when
+          the cosine respondent method was used
+        - ``respondent_method`` : the method actually used
+
+    Raises
+    ------
+    ValueError
+        For an unknown ``respondent_method``, invalid clustering options, or an
+        invalid ``nan_strategy``.
+    """
+    if respondent_method not in ("auto", "cosine", "umap"):
+        raise ValueError(
+            "respondent_method must be 'auto', 'cosine' or 'umap', got "
+            f"{respondent_method!r}."
+        )
+
+    columns = _select_likert_columns(df, columns, pattern)
+    # With nan_strategy="fill" every respondent ends up clustered, so size
+    # selection should count all of them; "ignore" still drops incomplete ones.
+    if nan_strategy == "fill":
+        n_respondents = int(len(df))
+    else:
+        n_respondents = int(df[columns].notna().all(axis=1).sum())
+
+    method = respondent_method
+    if method == "auto":
+        method = _select_clustering_method(n_respondents, size_threshold=size_threshold)
+    elif method == "cosine" and n_respondents > size_threshold:
+        warnings.warn(
+            f"respondent_method='cosine' builds a {n_respondents}x"
+            f"{n_respondents} distance matrix, which is expensive/infeasible at "
+            "this size; consider 'umap' or 'auto'.",
+            stacklevel=2,
+        )
+    elif method == "umap" and n_respondents < 50:
+        warnings.warn(
+            f"respondent_method='umap' is unreliable with only {n_respondents} "
+            "respondents; consider 'cosine' or 'auto'.",
+            stacklevel=2,
+        )
+
+    # Distance threshold only applies to axes without an explicit cluster count.
+    resp_thr = distance_threshold if respondent_n_clusters is None else None
+    ques_thr = distance_threshold if question_n_clusters is None else None
+
+    if method == "cosine":
+        out = df.cluster_respondents_cosine(
+            columns=columns,
+            likert_mapping=likert_mapping,
+            linkage_method=linkage_method,
+            n_clusters=respondent_n_clusters,
+            distance_threshold=resp_thr,
+            nan_strategy=nan_strategy,
+            fill_value=fill_value,
+            output_column="respondent_cluster_id",
+            debug=debug,
+        )
+    else:
+        out = df.cluster_respondents_umap(
+            columns=columns,
+            likert_mapping=likert_mapping,
+            nan_strategy=nan_strategy,
+            fill_value=fill_value,
+            output_columns=(
+                "respondent_cluster_id",
+                "respondent_cluster_probability",
+            ),
+            debug=debug,
+            **umap_kwargs,
+        )
+
+    # Cluster the questions (cosine, on the same encoded columns).
+    question_clusters = out.cluster_questions(
+        columns=columns,
+        likert_mapping=likert_mapping,
+        linkage_method=linkage_method,
+        n_clusters=question_n_clusters,
+        distance_threshold=ques_thr,
+        nan_strategy=nan_strategy,
+        fill_value=fill_value,
+        debug=False,
+    )
+
+    # Store only plain (list/dict/scalar) objects in attrs so downstream pandas
+    # operations on ``out`` (melt/concat/groupby) keep working. The full Series
+    # is available directly from ``cluster_questions`` if needed.
+    q_linkage = question_clusters.attrs.get("linkage")
+    out.attrs["question_cluster_id"] = {
+        str(q): int(c) for q, c in question_clusters.items()
+    }
+    out.attrs["question_order"] = list(question_clusters.attrs.get("encoded_order", []))
+    out.attrs["question_linkage"] = (
+        q_linkage.tolist() if q_linkage is not None else None
+    )
+    out.attrs["respondent_method"] = method
+    return out
 
 
 @pf.register_dataframe_method
@@ -368,10 +956,14 @@ def encode_likert(
     likert_columns,
     output_prefix="likert_encoded_",
     custom_mapping=None,
-    scale=3,
     debug=True,
 ):
     """Encode Likert scale responses to numeric values.
+
+    Responses are encoded on a 3-point scale (-1 / 0 / +1). This intentionally
+    ignores intensity (both "agree" and "strongly agree" map to +1): the
+    clustering uses cosine distance on these vectors, which cares about the
+    *direction* of a respondent's opinions, not their magnitude.
 
     Parameters
     ----------
@@ -383,17 +975,7 @@ def encode_likert(
         Prefix for the new encoded columns. Default is 'likert_encoded_'.
     custom_mapping : dict, optional
         Optional custom mapping for Likert scale responses. If provided, the
-        built-in ``scale`` mapping is ignored.
-    scale : int, optional
-        Number of points for the built-in mapping. Either 3 (default) or 5.
-
-        - ``3``: agree/disagree collapse to +1/-1 regardless of intensity.
-        - ``5``: intensity is preserved, so "strongly agree" -> +2,
-          "agree" -> +1, neutral -> 0, "disagree" -> -1,
-          "strongly disagree" -> -2. Use this when the *magnitude* of
-          sentiment should count towards the distance between respondents
-          (see the encoding discussion in
-          ``docs/source/clustering_methods_comparison.md``).
+        built-in mapping is ignored.
     debug : bool, optional
         If True, prints out the mappings. Default is True.
 
@@ -404,23 +986,16 @@ def encode_likert(
 
     Notes
     -----
-    Default (3-point) mapping:
+    Default mapping:
     - -1: Phrases containing 'disagree', 'do not agree', etc.
     - 0: Phrases containing 'neutral', 'neither', 'unsure', etc.
     - +1: Phrases containing 'agree' (but not 'disagree' or 'not agree')
     - NaN: NaN values are preserved
-
-    With ``scale=5`` an "intensifier" (strongly/very/completely/totally/
-    extremely/highly) on an agree/disagree phrase pushes the value out to
-    +2 / -2.
     """
-    if scale not in (3, 5):
-        raise ValueError(f"scale must be 3 or 5, got {scale}.")
-
     df = df.copy()
 
     # Values a valid built-in mapping is allowed to produce.
-    valid_values = {-1, 0, 1} if scale == 3 else {-2, -1, 0, 1, 2}
+    valid_values = {-1, 0, 1}
 
     def default_mapping(response):
         if pd.isna(response):
@@ -433,22 +1008,15 @@ def encode_likert(
         ):
             return 0
 
-        # Intensity modifier (only affects the 5-point scale)
-        strong = bool(
-            re.search(
-                r"\b(strongly|very|completely|totally|extremely|highly)\b", response
-            )
-        )
-
-        # Disagree / Dissatisfied (-1, or -2 when strong on the 5-point scale)
+        # Disagree / Dissatisfied (-1)
         if re.search(r"\b(disagree)\b", response) or re.search(
             r"\b(dis|not|no)[-]{0,1}\s*(agree|satisf)", response
         ):
-            return -2 if (scale == 5 and strong) else -1
+            return -1
 
-        # Agree / Satisfied (1, or +2 when strong on the 5-point scale)
+        # Agree / Satisfied (1)
         if re.search(r"\bagree\b", response) or re.search(r"satisf", response):
-            return 2 if (scale == 5 and strong) else 1
+            return 1
 
         # Unable to classify
         return None
@@ -459,15 +1027,10 @@ def encode_likert(
     if custom_mapping is None:
         mapping_func = default_mapping
         if debug:
-            print(f"Using default {scale}-point mapping:")
+            print("Using default mapping:")
             print("-1: Phrases containing 'disagree', 'do not agree', etc.")
             print(" 0: Phrases containing 'neutral', 'neither', 'unsure', etc.")
             print("+1: Phrases containing 'agree' (but not 'disagree' or 'not agree')")
-            if scale == 5:
-                print(
-                    "±2: An intensifier (strongly/very/etc.) pushes agree/disagree"
-                    " out to +2/-2"
-                )
             print("NaN: NaN values are preserved")
     else:
 
@@ -500,7 +1063,8 @@ def encode_likert(
     if unconverted_phrases:
         warnings.warn(
             "The following phrases were not converted (mapped to NaN): "
-            f"{', '.join(unconverted_phrases)}"
+            f"{', '.join(unconverted_phrases)}",
+            stacklevel=2,
         )
 
     # Alert if default mapping didn't convert everything
@@ -514,7 +1078,8 @@ def encode_likert(
         if unconverted:
             warnings.warn(
                 "The default mapping didn't convert the following responses: "
-                f"{', '.join(unconverted)}"
+                f"{', '.join(unconverted)}",
+                stacklevel=2,
             )
 
     return df
@@ -886,6 +1451,10 @@ def fit_sentence_transformer(
     """
 
     # Initialize the sentence transformer model
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError:
+        _require_nlp_extra("fit_sentence_transformer")
     masked_df, mask = create_masked_df(df, [input_column])
     model = SentenceTransformer(model_name)
 
@@ -926,6 +1495,14 @@ def extract_sentiment(
     pandas.DataFrame
         The input DataFrame with additional columns for sentiment scores and labels.
     """
+
+    try:
+        from transformers import (
+            AutoModelForSequenceClassification,
+            AutoTokenizer,
+        )
+    except ImportError:
+        _require_nlp_extra("extract_sentiment")
 
     MODEL = "cardiffnlp/twitter-roberta-base-sentiment"
     tokenizer = AutoTokenizer.from_pretrained(MODEL)
@@ -1139,6 +1716,11 @@ def fit_spacy(df, input_column: str, output_column: str = "spacy_output"):
     If the spaCy model is not already downloaded, this function will attempt
     to download it automatically.
     """
+
+    try:
+        import spacy
+    except ImportError:
+        _require_nlp_extra("fit_spacy")
 
     # Check if the model is downloaded, if not, download it
     try:
