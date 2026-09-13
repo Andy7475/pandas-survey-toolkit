@@ -31,9 +31,9 @@ jobs:
             resolution: lowest-direct
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
-    - uses: astral-sh/setup-uv@v5
+    - uses: astral-sh/setup-uv@v10.1.0
       with:
         enable-cache: true
         python-version: ${{ matrix.python-version }}
@@ -61,9 +61,9 @@ jobs:
         python-version: ["3.10", "3.13"]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
-    - uses: astral-sh/setup-uv@v5
+    - uses: astral-sh/setup-uv@v10.1.0
       with:
         enable-cache: true
         python-version: ${{ matrix.python-version }}
