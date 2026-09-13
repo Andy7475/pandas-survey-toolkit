@@ -1,0 +1,41 @@
+name: Docs
+
+on:
+  pull_request:
+    branches: ["**"]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Sphinx docs
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        python-version: "3.11"
+
+    - name: Install pandoc (needed by nbsphinx/pypandoc for notebook examples)
+      run: sudo apt-get update && sudo apt-get install -y pandoc
+
+    # The example notebooks call extract_sentiment / cluster_comments, which
+    # need the 'nlp' extra (torch/transformers/spacy) to actually execute -
+    # nbsphinx re-runs every notebook on each build since nbstripout keeps
+    # committed outputs empty.
+    - name: Install package (with nlp extra) and docs dependencies
+      run: |
+        uv sync --extra nlp
+        uv pip install -r docs/requirements.txt
+
+    - name: Pre-install spaCy model
+      run: uv pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl
+
+    # -W turns warnings (broken references, toctree issues, bad docstrings,
+    # notebook execution errors) into failures, so a docs/code mismatch is
+    # caught here instead of silently going stale on the published site.
+    - name: Build docs (warnings as errors)
+      run: uv run sphinx-build -b html -W --keep-going docs/source docs/_build/html

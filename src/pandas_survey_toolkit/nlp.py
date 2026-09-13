@@ -972,7 +972,7 @@ def encode_likert(
     likert_columns : list
         List of column names containing Likert scale responses.
     output_prefix : str, optional
-        Prefix for the new encoded columns. Default is 'likert_encoded_'.
+        Prefix for the new encoded columns. Default is ``likert_encoded_``.
     custom_mapping : dict, optional
         Optional custom mapping for Likert scale responses. If provided, the
         built-in mapping is ignored.

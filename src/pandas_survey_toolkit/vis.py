@@ -479,6 +479,11 @@ def plot_respondent_dendrogram(
     if ax is None:
         _, ax = plt.subplots(figsize=(10, max(4, 0.25 * len(linkage_matrix))))
 
+    # Leaf labels are usually respondent names/ids, which overlap badly when
+    # drawn horizontally; default to vertical text (callers can override via
+    # dendrogram_kwargs).
+    dendrogram_kwargs.setdefault("leaf_rotation", 90)
+
     dendrogram(
         linkage_matrix,
         labels=labels,

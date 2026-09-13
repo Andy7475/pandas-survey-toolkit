@@ -27,10 +27,18 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx_autodoc_typehints",
     "nbsphinx",
+    "myst_parser",
 ]
 
 templates_path = ["_templates"]
 exclude_patterns = []
+
+# Let plain Markdown pages (e.g. clustering_methods_comparison.md) build
+# alongside the .rst/.ipynb sources.
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".md": "markdown",
+}
 
 
 # -- Options for HTML output -------------------------------------------------

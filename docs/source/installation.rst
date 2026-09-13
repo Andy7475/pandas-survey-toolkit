@@ -1,5 +1,5 @@
 Installation
-===========
+============
 
 Install the package using pip:
 

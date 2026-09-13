@@ -15,6 +15,7 @@ A toolkit for analyzing survey data using pandas extensions.
    installation
    examples
    usage
+   clustering_methods_comparison
    api/index
       
 Indices and tables
