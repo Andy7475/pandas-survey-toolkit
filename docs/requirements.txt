@@ -4,3 +4,4 @@ sphinx-autodoc-typehints
 nbsphinx
 pypandoc
 myst-parser
+ipykernel
